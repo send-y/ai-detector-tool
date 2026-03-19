@@ -1,129 +1,149 @@
 # server.py
-"""
-Flask API для AI детектора.
-Запуск: python server.py
-"""
-
 from __future__ import annotations
 
-import io
 import json
-import os
 import tempfile
 from pathlib import Path
 
+import numpy as np
 from flask import Flask, request, jsonify
-from flask_cors import CORS  # pip install flask-cors
+from flask_cors import CORS
 
 from metric_tool import compute_metrics
-from scorer import _Model, metrics_to_vector
 
-# ---------------------------------------------------------------------------
-# Инициализация
-# ---------------------------------------------------------------------------
 
-app        = Flask(__name__)
-CORS(app)  # разрешаем запросы с React (localhost:3000)
+app = Flask(__name__)
+CORS(app)
 
 MODEL_PATH = Path("model.json")
-
-# Загружаем модель один раз при старте
-if not MODEL_PATH.exists():
-    raise FileNotFoundError(
-        f"Модель не найдена: {MODEL_PATH}\n"
-        "Сначала запусти: python analyze_metrics.py --csv metrics.csv"
-    )
-
-model = _Model(MODEL_PATH)
-print(f"Модель загружена: {model.model_type}")
+ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 
 
-# ---------------------------------------------------------------------------
-# Роуты
-# ---------------------------------------------------------------------------
+def sigmoid(z: float) -> float:
+    z = float(np.clip(z, -50.0, 50.0))
+    return 1.0 / (1.0 + np.exp(-z))
+
+
+def load_model(path: Path) -> dict:
+    if not path.exists():
+        raise FileNotFoundError(
+            f"model.json не найден: {path}\n"
+            "Сначала обучи модель: python analyze_metrics.py --csv metrics.csv --save model.json"
+        )
+    m = json.loads(path.read_text(encoding="utf-8"))
+    for k in ("feature_cols", "mu", "sg", "w", "b"):
+        if k not in m:
+            raise ValueError(f"model.json missing key '{k}'")
+
+    # numpy-версии
+    m["mu"] = np.array(m["mu"], dtype=np.float64)
+    m["sg"] = np.array(m["sg"], dtype=np.float64)
+    m["w"]  = np.array(m["w"],  dtype=np.float64)
+    m["b"]  = float(m["b"])
+
+    m["threshold"] = float(m.get("threshold", 0.5))
+    m["z_clip"]    = float(m.get("z_clip", 6.0))
+    m["sg_floor"]  = float(m.get("sg_floor", 1e-3))
+    return m
+
+
+MODEL = load_model(MODEL_PATH)
+COLS = list(MODEL["feature_cols"])
+
+
+def predict_with_explain(x: np.ndarray) -> tuple[float, float, list[dict]]:
+    mu = MODEL["mu"]
+    sg = np.maximum(MODEL["sg"], MODEL["sg_floor"])
+    w  = MODEL["w"]
+    b  = MODEL["b"]
+
+    z = (x - mu) / sg
+    z = np.clip(z, -MODEL["z_clip"], MODEL["z_clip"])
+
+    contrib = w * z
+    logit = float(z @ w + b)
+    p_ai = sigmoid(logit)
+
+    idx = np.argsort(np.abs(contrib))[::-1][:5]
+    top = [{
+        "metric": COLS[i],
+        "value": float(x[i]),
+        "z": float(z[i]),
+        "weight": float(w[i]),
+        "contribution": float(contrib[i]),
+    } for i in idx]
+
+    return p_ai, logit, top
+
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    """Проверка что сервер работает."""
     return jsonify({
-        "status":     "ok",
-        "model_type": model.model_type,
+        "status": "ok",
+        "model_type": MODEL.get("type", "unknown"),
+        "n_features": len(COLS),
+        "threshold": MODEL["threshold"],
+        "z_clip": MODEL["z_clip"],
+        "sg_floor": MODEL["sg_floor"],
     })
 
 
 @app.route("/api/analyze", methods=["POST"])
 def analyze():
-    """
-    Принимает изображение, возвращает метрики и вероятность AI.
-
-    Request:  multipart/form-data  { image: File }
-    Response: application/json     { probability, label, metrics }
-    """
     if "image" not in request.files:
-        return jsonify({"error": "Файл не найден в запросе"}), 400
+        return jsonify({"error": "Файл не найден в запросе (поле должно называться 'image')"}), 400
 
     file = request.files["image"]
-
-    if file.filename == "":
+    if not file.filename:
         return jsonify({"error": "Файл не выбран"}), 400
 
-    # Проверяем расширение
-    allowed = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-    ext     = Path(file.filename).suffix.lower()
-    if ext not in allowed:
-        return jsonify({
-            "error": f"Неподдерживаемый формат: {ext}. "
-                     f"Используй: {', '.join(allowed)}"
-        }), 400
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTS:
+        return jsonify({"error": f"Неподдерживаемый формат: {ext}. Разрешено: {sorted(ALLOWED_EXTS)}"}), 400
 
-    # Сохраняем во временный файл
+    tmp_path: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile(
-            suffix=ext, delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
             tmp_path = Path(tmp.name)
             file.save(tmp_path)
 
-        # Считаем метрики
-        metrics = compute_metrics(tmp_path)
-        x       = metrics_to_vector(metrics)
-        prob    = model.predict_proba(x)
-        label   = "AI-generated" if prob >= 0.5 else "Real photo"
+        m = compute_metrics(tmp_path)
+
+        # вектор в порядке, как в model.json
+        x = np.array([float(getattr(m, c)) for c in COLS], dtype=np.float64)
+
+        p_ai, logit, top = predict_with_explain(x)
+        thr = MODEL["threshold"]
+        label = "AI-generated" if p_ai >= thr else "Real photo"
+
+        metrics_dict = {c: round(float(getattr(m, c)), 6) for c in COLS}
+
+        extras = {}
+        for k in ("metadata_flag", "exif_present", "orig_width", "orig_height", "file_size_kb", "file_bpp"):
+            if hasattr(m, k):
+                v = getattr(m, k)
+                if isinstance(v, (int, float, np.integer, np.floating)):
+                    extras[k] = float(v)
+                else:
+                    extras[k] = v
 
         return jsonify({
-            "probability": round(float(prob), 4),
-            "label":       label,
-            "metrics": {
-                "entropy":            round(metrics.entropy,            4),
-                "laplacian_variance": round(metrics.laplacian_variance, 4),
-                "hf_energy_ratio":    round(metrics.hf_energy_ratio,    4),
-                "spectral_slope":     round(metrics.spectral_slope,     4),
-                "noise_entropy":      round(metrics.noise_entropy,      4),
-                "gradient_variance":  round(metrics.gradient_variance,  4),
-                "edge_density":       round(metrics.edge_density,       4),
-                "color_uniformity":   round(metrics.color_uniformity,   4),
-                "saturation_mean":    round(metrics.saturation_mean,    4),
-                "dct_energy_ratio":   round(metrics.dct_energy_ratio,   4),
-                "metadata_flag":      metrics.metadata_flag,
-            },
+            "probability": round(float(p_ai), 4),
+            "label": label,
+            "threshold": float(thr),
+            "logit": round(float(logit), 6),
+            "top_contributions": top,
+            "metrics": metrics_dict,
+            "extras": extras,
         })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
     finally:
-        # Удаляем временный файл
-        if tmp_path.exists():
-            tmp_path.unlink()
+        if tmp_path is not None and tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
 
-
-# ---------------------------------------------------------------------------
-# Запуск
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    app.run(
-        host  = "0.0.0.0",
-        port  = 5000,
-        debug = True,
-    )
+    app.run(host="0.0.0.0", port=5000, debug=True)

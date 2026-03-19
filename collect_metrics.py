@@ -1,124 +1,119 @@
 # collect_metrics.py
-"""
-Собирает метрики со всех изображений и сохраняет в CSV.
-
-Использование:
-    python collect_metrics.py --real dataset/real_512 --ai dataset/ai_512 --out metrics.csv
-"""
-
 from __future__ import annotations
 
 import argparse
 import csv
-import sys
-import time
-import traceback
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+import numpy as np
+from metric_tool import compute_metrics, FEATURE_COLS
 
-from metric_tool import compute_metrics, ImageMetrics
+IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 
-IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff"}
-
-FIELDNAMES = [
-    "file",
-    "label",
-    "entropy",
-    "laplacian_variance",
-    "hf_energy_ratio",
-    "spectral_slope",
-    "noise_entropy",
-    "gradient_variance",
-    "edge_density",
-    "color_uniformity",
-    "saturation_mean",
-    "dct_energy_ratio",
+EXTRA_COLS = [
+    "metadata_flag",
+    "exif_present",
+    "orig_width",
+    "orig_height",
+    "orig_aspect",
+    "file_size_kb",
+    "file_bpp",
 ]
 
 
 def iter_images(folder: Path) -> list[Path]:
-    if not folder.exists():
-        print(f"[ОШИБКА] Папка не найдена: {folder}", file=sys.stderr)
-        sys.exit(1)
-    paths = sorted(
-        p for p in folder.iterdir()
-        if p.suffix.lower() in IMAGE_EXTENSIONS
-    )
-    if not paths:
-        print(f"[ОШИБКА] Нет изображений в {folder}", file=sys.stderr)
-        sys.exit(1)
-    return paths
+    files: list[Path] = []
+    for p in folder.rglob("*"):
+        if p.is_file() and p.suffix.lower() in IMG_EXTS:
+            files.append(p)
+    files.sort()
+    return files
 
 
-def collect(real_dir: Path, ai_dir: Path, out_csv: Path) -> None:
-    real_paths = iter_images(real_dir)
-    ai_paths   = iter_images(ai_dir)
+def one_job(path: Path, label: int) -> dict:
+    m = compute_metrics(path)
 
-    tasks: list[tuple[Path, int]] = (
-        [(p, 0) for p in real_paths] +
-        [(p, 1) for p in ai_paths]
-    )
+    row: dict = {"file": str(path), "label": int(label)}
 
-    print(f"Найдено изображений : {len(tasks)}")
-    print(f"  real              : {len(real_paths)}")
-    print(f"  ai                : {len(ai_paths)}")
-    print(f"Выходной файл       : {out_csv}\n")
+    # FEATURES
+    for c in FEATURE_COLS:
+        v = getattr(m, c, None)
+        if v is None:
+            raise ValueError(f"metric '{c}' is None")
+        row[c] = float(v)
 
-    errors  = 0
-    t_start = time.time()
+    # EXTRAS
+    for c in EXTRA_COLS:
+        v = getattr(m, c, "")
+        if isinstance(v, (int, float, np.integer, np.floating)):  # type: ignore[name-defined]
+            row[c] = float(v)
+        else:
+            row[c] = v
+
+    return row
+
+
+def collect(real_dir: Path, ai_dir: Path, out_csv: Path, workers: int) -> None:
+    real_files = iter_images(real_dir)
+    ai_files = iter_images(ai_dir)
+
+    jobs: list[tuple[Path, int]] = [(p, 0) for p in real_files] + [(p, 1) for p in ai_files]
+    total = len(jobs)
+
+    metric_cols = list(FEATURE_COLS) + EXTRA_COLS
+    fieldnames = ["file", "label"] + metric_cols
+
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+
+    print(f"Real: {len(real_files)} from {real_dir}")
+    print(f"AI  : {len(ai_files)} from {ai_dir}")
+    print(f"Out : {out_csv}")
+    print(f"Cols: {len(metric_cols)} metrics (+ file,label)")
+    print(f"Workers: {workers}\n")
+
+    done = 0
+    err = 0
 
     with out_csv.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-        writer.writeheader()
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
 
-        for i, (path, label) in enumerate(tasks, 1):
-            try:
-                m: ImageMetrics = compute_metrics(path)
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            fut2job = {ex.submit(one_job, p, y): (p, y) for (p, y) in jobs}
 
-                writer.writerow({
-                    "file":               path.name,
-                    "label":              label,
-                    "entropy":            round(m.entropy,            6),
-                    "laplacian_variance": round(m.laplacian_variance, 6),
-                    "hf_energy_ratio":    round(m.hf_energy_ratio,    6),
-                    "spectral_slope":     round(m.spectral_slope,     6),
-                    "noise_entropy":      round(m.noise_entropy,      6),
-                    "gradient_variance":  round(m.gradient_variance,  6),
-                    "edge_density":       round(m.edge_density,       6),
-                    "color_uniformity":   round(m.color_uniformity,   6),
-                    "saturation_mean":    round(m.saturation_mean,    6),
-                    "dct_energy_ratio":   round(m.dct_energy_ratio,   6),
-                })
+            for fut in as_completed(fut2job):
+                p, y = fut2job[fut]
+                try:
+                    row = fut.result()
 
-            except Exception:
-                errors += 1
-                print(f"  [ОШИБКА] {path.name}", file=sys.stderr)
-                traceback.print_exc()
-                continue
+                    for k in metric_cols:
+                        if isinstance(row.get(k), float):
+                            row[k] = round(row[k], 6)
 
-            if i % 50 == 0 or i == len(tasks):
-                elapsed   = time.time() - t_start
-                per_img   = elapsed / i
-                remaining = per_img * (len(tasks) - i)
-                print(
-                    f"  [{i:>4}/{len(tasks)}] "
-                    f"{per_img:.2f}s/img  "
-                    f"осталось ~{remaining/60:.1f} мин"
-                )
+                    w.writerow(row)
 
-    total = time.time() - t_start
-    print(f"\nГотово за {total/60:.1f} минут")
-    print(f"Ошибок  : {errors}")
-    print(f"CSV     : {out_csv.resolve()}")
+                except Exception as e:
+                    err += 1
+                    print(f"[ERROR] {p} (label={y}) -> {e}")
+
+                done += 1
+                if done % 200 == 0 or done == total:
+                    print(f"Progress: {done}/{total}  errors={err}")
+
+    print(f"\nDone: {out_csv}")
+    print(f"Errors: {err}")
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description="Collect metrics into CSV.")
     ap.add_argument("--real", required=True)
-    ap.add_argument("--ai",   required=True)
-    ap.add_argument("--out",  default="metrics.csv")
+    ap.add_argument("--ai", required=True)
+    ap.add_argument("--out", default="metrics.csv")
+    ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 8) // 2))
     args = ap.parse_args()
 
-    collect(Path(args.real), Path(args.ai), Path(args.out))
+    collect(Path(args.real), Path(args.ai), Path(args.out), args.workers)
 
 
 if __name__ == "__main__":

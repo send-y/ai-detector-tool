@@ -1,317 +1,311 @@
-
-# generate_ai_images.py
 """
-Генерирует разнообразные AI изображения через Stable Diffusion.
+Генерирует AI-изображения через Stable Diffusion и SDXL.
 """
 from __future__ import annotations
 
+# ✅ Шаг 1: настройка окружения ДО всех импортов HuggingFace
 import os
+from pathlib import Path
 
-# Фикс кэша — ОБЯЗАТЕЛЬНО до импорта diffusers/torch
-_DIR   = os.path.dirname(os.path.abspath(__file__))
-_CACHE = os.path.join(_DIR, "hf_cache")
-os.makedirs(os.path.join(_CACHE, "hub"),          exist_ok=True)
-os.makedirs(os.path.join(_CACHE, "transformers"), exist_ok=True)
-os.environ["HF_HOME"]               = _CACHE
-os.environ["HUGGINGFACE_HUB_CACHE"] = os.path.join(_CACHE, "hub")
-os.environ["TRANSFORMERS_CACHE"]    = os.path.join(_CACHE, "transformers")
+_DIR   = Path(__file__).parent
+_CACHE = _DIR / "hf_cache"
 
+(_CACHE / "hub").mkdir(parents=True, exist_ok=True)
+(_CACHE / "transformers").mkdir(parents=True, exist_ok=True)
+
+os.environ["HF_HOME"]                = str(_CACHE)
+os.environ["HUGGINGFACE_HUB_CACHE"]  = str(_CACHE / "hub")
+os.environ["TRANSFORMERS_CACHE"]     = str(_CACHE / "transformers")
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
+# ✅ Токен из переменной окружения, не из кода
+# Установи: set HF_TOKEN=hf_xxx  (Windows) или export HF_TOKEN=hf_xxx (Linux)
+# os.environ["HF_TOKEN"] уже должен быть установлен снаружи
+
+# ✅ Шаг 2: импорты после настройки окружения
 import argparse
 import random
 import time
-from pathlib import Path
-import random
 
 import torch
-from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler
+from diffusers import (
+    StableDiffusionPipeline,
+    StableDiffusionXLPipeline,
+    DPMSolverMultistepScheduler,
+    EulerDiscreteScheduler,
+)
 
-# ---------------------------------------------------------------------------
-# Промпты — разнообразные сцены чтобы датасет не был однородным
-# ---------------------------------------------------------------------------
+# --- Промпты ---
 
 SUBJECTS = [
-    # Люди — бытовые ситуации
-    "a person", "a woman", "a man", "a young woman", "a young man",
-    "an old woman", "an old man", "a teenager", "a child", "a baby",
-    "a group of people", "a couple", "a family", "two people talking",
-    "a person walking", "a person sitting", "a person standing",
-    "a person eating", "a person reading", "a person on a phone",
-    "a person carrying bags", "a person riding a bicycle",
-    "a person waiting", "a person looking at something",
-
+    # Люди
+    "a middle-aged man", "an elderly woman", "a teenage girl",
+    "a businessman", "a construction worker", "a chef",
+    "a street musician", "a jogger", "a tourist",
+    "two friends", "a mother with child", "a student",
     # Животные
-    "a dog", "a cat", "a bird", "a horse", "a cow",
-    "a sheep", "a dog running", "a cat sitting",
-    "a dog and its owner", "a bird on a branch",
-
+    "a golden retriever", "a tabby cat", "a pigeon",
+    "a squirrel", "a duck", "a rabbit",
+    # Еда и напитки
+    "a burger and fries", "a slice of pizza", "a sushi plate",
+    "a glass of wine", "a breakfast plate", "a fruit bowl",
     # Транспорт
-    "a car", "a bicycle", "a motorcycle", "a bus", "a truck",
-    "a parked car", "cars on a street", "a bicycle leaning against a wall",
-
-    # Еда и предметы
-    "a dining table with food", "a plate of food", "a bowl of soup",
-    "a sandwich", "a pizza", "fruit on a table", "vegetables",
-    "a cup of coffee on a table", "a bottle and glass",
-
-    # Мебель и интерьер
-    "a couch", "a chair", "a bed", "a desk with a laptop",
-    "a kitchen counter with dishes", "a bookshelf",
-    "a tv in a living room", "a dining table",
+    "a taxi cab", "a city bus", "a delivery truck",
+    "a parked bicycle", "a scooter", "a subway train",
+    # Интерьер
+    "a messy desk", "a bookshelf", "a bathroom sink",
+    "a fireplace", "a staircase", "a window with curtains",
+    # Природа
+    "a rocky mountain", "a sandy beach", "a wheat field",
+    "a waterfall", "a snowy street", "a foggy road",
 ]
 
 SCENES = [
-    # Городские — обычные места
-    "on a sidewalk", "on a city street", "at a crosswalk",
-    "in a parking lot", "near a bus stop", "on a busy street",
-    "in front of a store", "near a building", "in a shopping area",
-    "on a bridge", "near a traffic light", "in a square",
-
-    # Общественные места
-    "in a restaurant", "in a cafe", "in a fast food place",
-    "in a supermarket", "at a market stall", "in a shopping mall",
-    "at a train station", "at an airport", "in a hospital",
-    "in a school", "in an office", "in a gym",
-
-    # Природа и парки
-    "in a park", "on a bench in a park", "near a tree",
-    "on a grass field", "near a pond", "on a hiking trail",
-    "at the beach", "near a river", "in a backyard",
-
-    # Интерьер жилой
-    "in a living room", "in a kitchen", "in a bedroom",
-    "in a bathroom", "in a hallway", "in a garage",
-    "on a balcony", "on a porch",
-
-    # Время суток
-    "during the day", "in the morning", "in the afternoon",
-    "in the evening", "on a cloudy day", "on a sunny day",
-    "on an overcast day",
+    # Городские
+    "on a rainy street", "in a subway station",
+    "at a farmers market", "near a construction site",
+    "outside a restaurant", "at a bus stop",
+    "in a shopping mall", "on a pedestrian bridge",
+    # Природные
+    "in a dense forest", "on a mountain trail",
+    "at a lake shore", "in a snowy landscape",
+    "at golden hour", "under overcast sky",
+    "in heavy rain", "in morning fog",
+    # Интерьерные
+    "in a small apartment", "in a crowded restaurant",
+    "in a hospital waiting room", "in a school classroom",
+    "in a gym", "in a library",
+    "in a hotel lobby", "in a garage",
 ]
 
-# Стили — упор на любительское и документальное фото
 STYLES = [
-    # Любительское (самое реалистичное)
-    "amateur photo",
-    "smartphone photo",
-    "iPhone photo",
-    "snapshot",
-    "casual photo",
-    "family photo",
-    "vacation photo",
-    "candid photo",
-
-    # Полупрофессиональное
-    "DSLR photo",
-    "photograph",
-    "documentary photo",
-    "street photography",
-    "news photo",
-    "photojournalism",
-    "travel photo",
+    "iPhone photo", "security camera footage",
+    "newspaper photo", "documentary photo",
+    "street photography", "paparazzi photo",
+    "real estate photo", "food photography",
+    "wedding photo", "sports photo",
+    "surveillance photo", "dashcam footage",
 ]
 
-# Технические детали — имитируют реальные условия съёмки
-CAMERA_DETAILS = [
-    "",  # без деталей (чаще всего)
-    "",
-    "",
-    "shot on iPhone",
-    "shot on Samsung Galaxy",
-    "shot on Canon EOS",
-    "shot on Nikon",
-    "35mm film",
-    "Fujifilm",
-]
-
-# Несовершенства — делают фото более реалистичным
-IMPERFECTIONS = [
-    "",  # без несовершенств (чаще всего)
-    "",
-    "",
-    "slightly blurry",
-    "slight motion blur",
-    "slightly overexposed",
-    "slightly underexposed",
-    "grainy",
-    "film grain",
-    "lens flare",
-    "slightly out of focus background",
-    "taken in a hurry",
-    "low light",
-    "harsh shadows",
-]
-
-# Качество — реалистичное, не глянцевое
 QUALITY = (
-    "realistic, natural lighting, photorealistic, "
-    "real photo, authentic, everyday life"
+    "photorealistic, natural lighting, shot on camera, "
+    "authentic, unedited, raw photo, real life, "
+    "high resolution, sharp focus"
 )
 
-# Негативный промпт — убираем всё что выдаёт AI
 NEGATIVE = (
-    "painting, drawing, illustration, cartoon, anime, render, cgi, "
-    "3d, digital art, watermark, text, logo, signature, "
-    "oversaturated, perfect lighting, studio lighting, "
-    "too sharp, too clean, too perfect, unrealistic, "
-    "plastic skin, smooth skin, airbrushed, "
-    "extra limbs, bad anatomy, deformed, ugly, "
-    "fantasy, sci-fi, surreal, abstract"
+    "painting, illustration, drawing, cartoon, anime, "
+    "3d render, cgi, digital art, concept art, "
+    "watermark, text, logo, signature, border, frame, "
+    "unrealistic, bad anatomy, deformed, blurry, "
+    "oversaturated, hdr, fake, artificial"
 )
 
 
 def random_prompt() -> tuple[str, str]:
-    """
-    Возвращает (prompt, negative_prompt).
-
-    Строит промпт из случайных компонентов.
-    Чем больше компонентов — тем разнообразнее датасет.
-    """
-    subject    = random.choice(SUBJECTS)
-    scene      = random.choice(SCENES)
-    style      = random.choice(STYLES)
-    camera     = random.choice(CAMERA_DETAILS)
-    imperfect  = random.choice(IMPERFECTIONS)
-
-    parts = [f"{style} of {subject} {scene}", QUALITY]
-
-    if camera:
-        parts.append(camera)
-    if imperfect:
-        parts.append(imperfect)
-
-    prompt = ", ".join(parts)
+    subject = random.choice(SUBJECTS)
+    scene   = random.choice(SCENES)
+    style   = random.choice(STYLES)
+    prompt  = f"{style} of {subject} {scene}, {QUALITY}"
     return prompt, NEGATIVE
 
 
-# ---------------------------------------------------------------------------
-# Загрузка пайплайна
-# ---------------------------------------------------------------------------
+# --- Определение типа модели ---
 
-def load_pipeline(model_id: str) -> StableDiffusionPipeline:
-    print(f"Загрузка модели: {model_id}")
-    print("Первый запуск скачает ~4GB — подожди...\n")
+def is_sdxl(model_id: str) -> bool:
+    return "xl" in model_id.lower()
 
+
+# --- Загрузка пайплайнов ---
+
+def load_pipeline_sd15(model_id: str) -> StableDiffusionPipeline:
+    print("Тип: Stable Diffusion 1.5")
     pipe = StableDiffusionPipeline.from_pretrained(
         model_id,
-        torch_dtype=torch.float16,   # float16 обязательно для 8GB VRAM
+        torch_dtype=torch.float16,
         safety_checker=None,
         requires_safety_checker=False,
+        use_safetensors=True,          # ← добавь это для V6
+        token=os.environ.get("HF_TOKEN"),
     )
-
-    # DPM++ 2M — быстрый и качественный планировщик
     pipe.scheduler = DPMSolverMultistepScheduler.from_config(
         pipe.scheduler.config,
         use_karras_sigmas=True,
+        algorithm_type="dpmsolver++",
+        final_sigmas_type="sigma_min",
+    )
+    pipe = pipe.to("cuda")
+    pipe.enable_attention_slicing()
+    return pipe
+
+    # ✅ Исправление — переопределяем проблемные параметры
+    pipe.scheduler = DPMSolverMultistepScheduler.from_config(
+        pipe.scheduler.config,
+        use_karras_sigmas=True,
+        algorithm_type="dpmsolver++",   # ← было deis в конфиге модели
+        final_sigmas_type="sigma_min",  # ← было zero в конфиге модели
     )
 
     pipe = pipe.to("cuda")
-
-    # Экономия VRAM — важно для 8GB
     pipe.enable_attention_slicing()
-
     return pipe
 
 
-# ---------------------------------------------------------------------------
-# Генерация
-# ---------------------------------------------------------------------------
+def load_pipeline_sdxl(model_id: str) -> StableDiffusionXLPipeline:
+    print("Тип: Stable Diffusion XL")
+    pipe = StableDiffusionXLPipeline.from_pretrained(
+        model_id,
+        torch_dtype=torch.float16,
+        use_safetensors=True,
+        variant="fp16",
+        token=os.environ.get("HF_TOKEN"),
+    )
+    pipe.scheduler = EulerDiscreteScheduler.from_config(
+        pipe.scheduler.config,
+    )
+    pipe.enable_model_cpu_offload()
+    pipe.enable_attention_slicing()
+    return pipe
 
-def generate(out_dir: Path, count: int, model_id: str, seed: int) -> None:
+
+def load_pipeline(model_id: str):
+    print(f"Загрузка модели: {model_id}")
+    print("Первый запуск скачает ~4-6 GB — подожди...\n")
+    if is_sdxl(model_id):
+        return load_pipeline_sdxl(model_id)
+    return load_pipeline_sd15(model_id)
+
+
+
+# --- Параметры генерации по типу модели ---
+
+def get_image_size(use_sdxl: bool) -> tuple[int, int]:
+    """
+    SDXL обучен на 1024×1024.
+    SD 1.5 — на 512×512.
+    """
+    return (1024, 1024) if use_sdxl else (1024, 1024)
+
+
+# --- Генерация ---
+
+def generate(
+    out_dir: Path,
+    count: int,
+    model_id: str,
+    base_seed: int,
+) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Проверяем сколько уже есть (чтобы можно было продолжить после остановки)
     existing = list(out_dir.glob("ai_*.png"))
     start_i  = len(existing)
 
     if start_i >= count:
-        print(f"Уже есть {start_i} изображений — ничего не делаем.")
+        print(f"Уже есть {start_i} изображений — пропускаем генерацию.")
         return
 
     if start_i > 0:
-        print(f"Найдено {start_i} уже готовых — продолжаем с {start_i}...\n")
+        print(f"Найдено {start_i} готовых — продолжаем с {start_i}...\n")
 
-    pipe = load_pipeline(model_id)
+    pipe     = load_pipeline(model_id)
+    use_sdxl = is_sdxl(model_id)
+    width, height = get_image_size(use_sdxl)
 
-    generator = torch.Generator("cuda").manual_seed(seed)
+    print(f"Размер изображений : {width}×{height}")
+    print(f"Генерация {count - start_i} изображений в {out_dir}\n")
 
-    print(f"Генерация {count - start_i} изображений на {out_dir}\n")
     t0 = time.time()
 
     for i in range(start_i, count):
         prompt, negative = random_prompt()
 
-        image = pipe(
-            prompt          = prompt,
-            negative_prompt = negative,
-            width           = 512,
-            height          = 512,
-            num_inference_steps = 25,  # 25 шагов — баланс скорость/качество
-            guidance_scale      = 7.0,
-            generator           = generator,
-        ).images[0]
+        # ✅ Уникальный seed для каждого изображения
+        seed      = base_seed + i
+        generator = torch.Generator("cuda").manual_seed(seed)
 
-        out_path = out_dir / f"ai_{i:05d}.png"
-        image.save(out_path)
+        try:
+            result = pipe(
+                prompt=prompt,
+                negative_prompt=negative,
+                width=width,
+                height=height,
+                num_inference_steps=25,
+                guidance_scale=7.0,
+                generator=generator,
+                output_type="pil",
+            )
+            image = result.images[0]
 
-        # Прогресс
-        elapsed  = time.time() - t0
-        done     = i - start_i + 1
-        per_img  = elapsed / done
-        remaining = per_img * (count - i - 1)
+            out_path = out_dir / f"ai_{i:05d}.png"
+            image.save(out_path)
 
-        print(
-            f"[{i+1:>4}/{count}] "
-            f"{per_img:.1f}s/img  "
-            f"осталось ~{remaining/60:.0f} мин  |  {prompt[:60]}"
-        )
+            elapsed   = time.time() - t0
+            done      = i - start_i + 1
+            per_img   = elapsed / done
+            remaining = per_img * (count - i - 1)
+
+            print(
+                f"[{i+1:>4}/{count}] "
+                f"seed={seed}  "
+                f"{per_img:.1f}s/img  "
+                f"осталось ~{remaining/60:.0f} мин  |  "
+                f"{prompt[:60]}"
+            )
+
+        except torch.cuda.OutOfMemoryError:
+            print(f"[{i+1:>4}/{count}] OOM — очищаем память и пропускаем")
+            torch.cuda.empty_cache()
+            continue
 
     total = time.time() - t0
-    print(f"\nГотово! {count - start_i} изображений за {total/60:.1f} минут")
+    generated = count - start_i
+    print(
+        f"\nГотово! Сгенерировано {generated} изображений "
+        f"за {total/60:.1f} минут"
+    )
     print(f"Папка: {out_dir.resolve()}")
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+# --- CLI ---
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument(
+    parser = argparse.ArgumentParser(
+        description="Генератор AI-изображений (SD 1.5 / SDXL)"
+    )
+    parser.add_argument(
         "--out",
         default="dataset/ai_512",
-        help="Папка для сохранения (default: dataset/ai_512)",
+        help="Папка для сохранения изображений",
     )
-    ap.add_argument(
+    parser.add_argument(
         "--count",
         type=int,
         default=1000,
-        help="Сколько изображений сгенерировать (default: 1000)",
+        help="Количество изображений",
     )
-    ap.add_argument(
+    parser.add_argument(
         "--model",
         default="runwayml/stable-diffusion-v1-5",
-        help="Модель с HuggingFace (default: SD 1.5)",
+        help="ID модели на HuggingFace",
     )
-    ap.add_argument(
+    parser.add_argument(
         "--seed",
         type=int,
         default=42,
-        help="Random seed (default: 42)",
+        help="Базовый seed (каждое фото получит seed+i)",
     )
-    args = ap.parse_args()
+    args = parser.parse_args()
 
-    print(f"Устройство : {torch.cuda.get_device_name(0)}")
-    print(f"VRAM       : {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+    device_name = torch.cuda.get_device_name(0)
+    vram_gb     = torch.cuda.get_device_properties(0).total_memory / 1e9
+
+    print(f"Устройство : {device_name}")
+    print(f"VRAM       : {vram_gb:.1f} GB")
     print(f"Модель     : {args.model}")
     print(f"Количество : {args.count}")
     print(f"Выход      : {args.out}\n")
 
-    generate(
-        out_dir  = Path(args.out),
-        count    = args.count,
-        model_id = args.model,
-        seed     = args.seed,
-    )
+    generate(Path(args.out), args.count, args.model, args.seed)
 
 
 if __name__ == "__main__":

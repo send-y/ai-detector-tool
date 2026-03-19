@@ -1,13 +1,4 @@
 # scorer.py
-"""
-Скорит изображение используя обученную модель.
-
-Использование:
-    python scorer.py image.jpg
-    python scorer.py image.jpg --model model.json --verbose
-    python scorer.py image.jpg --model model.json --json
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -16,171 +7,97 @@ from pathlib import Path
 
 import numpy as np
 
-from metric_tool import compute_metrics, ImageMetrics
-
-FEATURE_COLS = [
-    "entropy",
-    "laplacian_variance",
-    "hf_energy_ratio",
-    "spectral_slope",
-    "noise_entropy",
-    "gradient_variance",
-    "edge_density",
-    "color_uniformity",
-    "saturation_mean",
-    "dct_energy_ratio",
-]
+from metric_tool import compute_metrics
 
 
-# ---------------------------------------------------------------------------
-# Загрузка модели
-# ---------------------------------------------------------------------------
-
-class _Model:
-    """Универсальная обёртка — работает с GaussianNB и LogisticRegression."""
-
-    def __init__(self, path: Path) -> None:
-        with path.open(encoding="utf-8") as f:
-            self.data       = json.load(f)
-        self.model_type = self.data["type"]
-        self.features   = self.data["features"]
-
-    def predict_proba(self, x: np.ndarray) -> float:
-        if self.model_type == "GaussianNB":
-            return self._predict_nb(x)
-        if self.model_type == "LogisticRegression":
-            return self._predict_lr(x)
-        raise ValueError(f"Неизвестный тип модели: {self.model_type}")
-
-    def _predict_nb(self, x: np.ndarray) -> float:
-        means  = {int(k): np.array(v) for k, v in self.data["means"].items()}
-        stds   = {int(k): np.array(v) for k, v in self.data["stds"].items()}
-        priors = {int(k): float(v)    for k, v in self.data["priors"].items()}
-
-        def ll(cls: int) -> float:
-            mu, sig = means[cls], stds[cls]
-            return float(
-                np.log(priors[cls])
-                - np.sum(np.log(sig))
-                - 0.5 * np.sum(((x - mu) / sig) ** 2)
-            )
-
-        ll0, ll1 = ll(0), ll(1)
-        m        = max(ll0, ll1)
-        e0, e1   = np.exp(ll0 - m), np.exp(ll1 - m)
-        return float(e1 / (e0 + e1))
-
-    def _predict_lr(self, x: np.ndarray) -> float:
-        w  = np.array(self.data["w"])
-        b  = float(self.data["b"])
-        mu = np.array(self.data["mu"])
-        sg = np.array(self.data["sg"])
-        xn = (x - mu) / (sg + 1e-9)
-        z  = float(xn @ w + b)
-        return float(1.0 / (1.0 + np.exp(-z)))
+def sigmoid(z: float) -> float:
+    z = float(np.clip(z, -50.0, 50.0))
+    return 1.0 / (1.0 + np.exp(-z))
 
 
-# ---------------------------------------------------------------------------
-# Скоринг
-# ---------------------------------------------------------------------------
-
-def metrics_to_vector(m: ImageMetrics) -> np.ndarray:
-    return np.array([
-        m.entropy,
-        m.laplacian_variance,
-        m.hf_energy_ratio,
-        m.spectral_slope,
-        m.noise_entropy,
-        m.gradient_variance,
-        m.edge_density,
-        m.color_uniformity,
-        m.saturation_mean,
-        m.dct_energy_ratio,
-    ], dtype=np.float64)
+def load_model(path: str | Path) -> dict:
+    obj = json.loads(Path(path).read_text(encoding="utf-8"))
+    for k in ("feature_cols", "mu", "sg", "w", "b"):
+        if k not in obj:
+            raise ValueError(f"Model file missing key: {k}")
+    return obj
 
 
-def score_image(image_path: Path, model_path: Path) -> dict:
-    model   = _Model(model_path)
-    metrics = compute_metrics(image_path)
-    x       = metrics_to_vector(metrics)
-    prob    = model.predict_proba(x)
-    label   = "AI-generated" if prob >= 0.5 else "Real photo"
+def score_image(image_path: str | Path, model_path: str | Path, z_clip: float = 6.0, sg_floor: float = 1e-3) -> dict:
+    model = load_model(model_path)
+    m = compute_metrics(image_path)
+
+    cols = model["feature_cols"]
+    x = np.array([float(getattr(m, c)) for c in cols], dtype=np.float64)
+
+    mu = np.array(model["mu"], dtype=np.float64)
+    sg = np.array(model["sg"], dtype=np.float64)
+    w  = np.array(model["w"], dtype=np.float64)
+    b  = float(model["b"])
+    thr = float(model.get("threshold", 0.5))
+
+    # robust normalization
+    sg = np.maximum(sg, float(sg_floor))
+    z = (x - mu) / sg
+    z = np.clip(z, -float(z_clip), float(z_clip))
+
+    logit = float(z @ w + b)
+    p_ai = float(sigmoid(logit))
+
+    # contributions to logit
+    contrib = w * z
+    idx = np.argsort(np.abs(contrib))[::-1][:5]
+    top = [{
+        "metric": cols[i],
+        "value": float(x[i]),
+        "z": float(z[i]),
+        "weight": float(w[i]),
+        "contribution": float(contrib[i]),
+    } for i in idx]
 
     return {
-        "file":        str(image_path),
-        "model_type":  model.model_type,
-        "probability": round(prob, 4),
-        "label":       label,
-        "metrics": {
-            "entropy":            round(metrics.entropy,            4),
-            "laplacian_variance": round(metrics.laplacian_variance, 4),
-            "hf_energy_ratio":    round(metrics.hf_energy_ratio,    4),
-            "spectral_slope":     round(metrics.spectral_slope,     4),
-            "noise_entropy":      round(metrics.noise_entropy,      4),
-            "gradient_variance":  round(metrics.gradient_variance,  4),
-            "edge_density":       round(metrics.edge_density,       4),
-            "color_uniformity":   round(metrics.color_uniformity,   4),
-            "saturation_mean":    round(metrics.saturation_mean,    4),
-            "dct_energy_ratio":   round(metrics.dct_energy_ratio,   4),
-            "metadata_flag":      metrics.metadata_flag,
-        },
+        "image": str(image_path),
+        "model": str(model_path),
+        "p_ai": p_ai,
+        "label": "ai" if p_ai >= thr else "real",
+        "threshold": thr,
+        "logit": logit,
+        "top_contributions": top,
+        "metrics": {k: float(getattr(m, k)) for k in cols},
     }
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
 def main() -> None:
-    ap = argparse.ArgumentParser(
-        description="Определить AI-сгенерированное изображение или нет."
-    )
-    ap.add_argument("image",     help="Путь к изображению")
-    ap.add_argument("--model",   default="model.json")
-    ap.add_argument("--verbose", action="store_true")
-    ap.add_argument("--json",    action="store_true")
+    ap = argparse.ArgumentParser(description="Score an image (AI vs Real).")
+    ap.add_argument("image", help="Path to image")
+    ap.add_argument("--model", default="model.json", help="Path to model.json")
+    ap.add_argument("--verbose", action="store_true", help="Print metrics")
+    ap.add_argument("--explain", action="store_true", help="Print top-5 metric contributions")
+    ap.add_argument("--json", action="store_true", help="Output JSON")
+    ap.add_argument("--z-clip", type=float, default=6.0, help="Clip z-scores to [-z_clip, z_clip]")
+    ap.add_argument("--sg-floor", type=float, default=1e-3, help="Minimum std dev for normalization")
     args = ap.parse_args()
 
-    image_path = Path(args.image)
-    model_path = Path(args.model)
-
-    if not image_path.exists():
-        print(f"[ОШИБКА] Файл не найден: {image_path}")
-        return
-
-    if not model_path.exists():
-        print(f"[ОШИБКА] Модель не найдена: {model_path}")
-        print("  Сначала запусти: python analyze_metrics.py --csv metrics.csv")
-        return
-
-    result = score_image(image_path, model_path)
+    res = score_image(args.image, args.model, z_clip=args.z_clip, sg_floor=args.sg_floor)
 
     if args.json:
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        print(json.dumps(res, ensure_ascii=False, indent=2))
         return
 
-    prob  = result["probability"]
-    label = result["label"]
+    print(f"Image: {res['image']}")
+    print(f"Model: {res['model']}")
+    print(f"p_ai : {res['p_ai']:.4f} (thr={res['threshold']})")
+    print(f"Pred : {res['label']}")
 
-    filled = int(prob * 20)
-    bar    = "█" * filled + "░" * (20 - filled)
-
-    print(f"\nФайл      : {result['file']}")
-    print(f"Модель    : {result['model_type']}")
-    print(f"Результат : {label}")
-    print(f"P(AI)     : {prob:.4f}  [{bar}]")
+    if args.explain:
+        print("\nTop contributions (to logit):")
+        for t in res["top_contributions"]:
+            print(f"  {t['metric']:<24} contrib={t['contribution']:+.4f}  z={t['z']:+.3f}  x={t['value']:.6f}  w={t['weight']:+.4f}")
 
     if args.verbose:
-        print(f"\n{'─' * 45}")
-        print("Метрики:")
-        width = max(len(k) for k in result["metrics"])
-        for key, val in result["metrics"].items():
-            if isinstance(val, float):
-                print(f"  {key:<{width}} = {val:.4f}")
-            else:
-                print(f"  {key:<{width}} = {val}")
-
-    print()
+        print("\nMetrics:")
+        for k, v in res["metrics"].items():
+            print(f"  {k:<24} {v:.6f}")
 
 
 if __name__ == "__main__":
