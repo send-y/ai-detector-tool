@@ -1,50 +1,288 @@
-// src/App.js
 import "./index.css";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DragDropZone from "./components/DragDropZone";
+
+import { initializeApp, getApps, getApp } from "firebase/app";
+import {
+  getAuth,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDPNat2fnQsRmLQNSiajNDBQCqiqWaJXew",
+  authDomain: "db-register-e2b63.firebaseapp.com",
+  projectId: "db-register-e2b63",
+  storageBucket: "db-register-e2b63.firebasestorage.app",
+  messagingSenderId: "221112421572",
+  appId: "1:221112421572:web:093e87ef2c46e0bc7dcd91",
+  measurementId: "G-7HL2JGNJRX",
+};
+
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+function prettyAuthError(err) {
+  const code = err?.code || "";
+  if (code === "auth/user-not-found") return "Пользователь не найден";
+  if (code === "auth/wrong-password") return "Неверный пароль";
+  if (code === "auth/invalid-credential") return "Неверный email или пароль";
+  if (code === "auth/invalid-email") return "Неверный формат email";
+  if (code === "auth/email-already-in-use") return "Этот email уже занят";
+  if (code === "auth/weak-password")
+    return "Пароль должен быть минимум 6 символов";
+  if (code === "auth/too-many-requests")
+    return "Слишком много попыток. Попробуй позже";
+  if (code === "auth/operation-not-allowed")
+    return "Email/Password не включен в Firebase";
+  return err?.message || "Ошибка авторизации";
+}
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [showAuth,   setShowAuth]   = useState(false);
-  const [authMode,   setAuthMode]   = useState("signin"); // signin | signup
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState("signin");
+  const [resetKey, setResetKey] = useState(0);
+  const [userName, setUserName] = useState("User");
+  const [userRole, setUserRole] = useState("user");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const isAdmin = String(userRole).trim().toLowerCase() === "admin";
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setIsLoggedIn(false);
+        setUserName("User");
+        setUserRole("user");
+        setTimeout(() => {
+          setLoading(false);
+        }, 1200);
+
+        localStorage.removeItem("lander_user");
+        localStorage.removeItem("lander_nickname");
+        localStorage.setItem("lander_auth", "0");
+        return;
+      }
+
+      try {
+        const ref = doc(db, "users", user.uid);
+        const snap = await getDoc(ref);
+
+        const profile = snap.exists() ? snap.data() : null;
+        const nickname =
+          profile?.nickname || user.email?.split("@")[0] || "User";
+        const role = String(profile?.role || "user")
+          .trim()
+          .toLowerCase();
+        const isAdmin = String(userRole).trim().toLowerCase() === "admin";
+        console.log("RAW ROLE:", profile?.role);
+        console.log("NORMALIZED ROLE:", role);
+        console.log("ROLE JSON:", JSON.stringify(profile?.role));
+        console.log("ROLE LENGTH:", String(profile?.role || "").length);
+
+        setUserName(nickname);
+        setUserRole(role);
+        setIsLoggedIn(true);
+        setShowAuth(false);
+        setLoading(false);
+
+        localStorage.setItem("lander_auth", "1");
+        localStorage.setItem("lander_nickname", nickname);
+        localStorage.setItem(
+          "lander_user",
+          JSON.stringify({
+            nickname,
+            email: user.email || "",
+            role,
+          }),
+        );
+      } catch (err) {
+        console.error("Ошибка чтения профиля:", err);
+
+        const nickname = user.email?.split("@")[0] || "User";
+        setUserName(nickname);
+        setUserRole("user");
+        setIsLoggedIn(true);
+        setShowAuth(false);
+        setLoading(false);
+
+        localStorage.setItem("lander_auth", "1");
+        localStorage.setItem("lander_nickname", nickname);
+        localStorage.setItem(
+          "lander_user",
+          JSON.stringify({
+            nickname,
+            email: user.email || "",
+            role: "user",
+          }),
+        );
+      }
+    });
+
+    return () => unsub();
+  }, []);
+
+  const handleBrandClick = () => {
+    setShowAuth(false);
+    setDropdownOpen(false);
+    setResetKey((prev) => prev + 1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleSignIn = async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(e.currentTarget);
+    const email = String(formData.get("email") || "").trim();
+    const password = String(formData.get("password") || "");
+
+    if (!email || !password) {
+      alert("Введи email и пароль");
+      return;
+    }
+
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      e.currentTarget.reset();
+      setShowAuth(false);
+    } catch (err) {
+      console.error(err);
+      alert(prettyAuthError(err));
+    }
+  };
+
+  const handleSignUp = async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(e.currentTarget);
+    const nickname = String(formData.get("nickname") || "").trim();
+    const email = String(formData.get("email") || "").trim();
+    const password = String(formData.get("password") || "");
+
+    if (!nickname || !email || !password) {
+      alert("Заполни nickname, email и пароль");
+      return;
+    }
+
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+
+      await setDoc(doc(db, "users", cred.user.uid), {
+        nickname,
+        email,
+        role: "user",
+        createdAt: serverTimestamp(),
+      });
+
+      e.currentTarget.reset();
+      setShowAuth(false);
+    } catch (err) {
+      console.error(err);
+      alert(prettyAuthError(err));
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setDropdownOpen(false);
+      setUserRole("user");
+      setResetKey((prev) => prev + 1);
+    } catch (err) {
+      console.error(err);
+      alert(prettyAuthError(err));
+    }
+  };
+
+  const handleAdminPanel = () => {
+    window.location.href = "/admin";
+  };
+
+  if (loading) {
+    return <div className="loading-screen">Loading...</div>;
+  }
 
   return (
-    <div>
+    <div onClick={() => setDropdownOpen(false)}>
       <div className="page-bg"></div>
 
       <main className="wrap">
         <section className="hero">
-
-          {/* Шапка */}
           <header className="topbar">
             <div className="topbar__left">
               <div className="brand">
-                <span className="brand__word">LANDER</span>
+                <button
+                  type="button"
+                  className="brand__word"
+                  onClick={handleBrandClick}
+                >
+                  LANDER
+                </button>
               </div>
             </div>
 
             <div className="topbar__right">
               {isLoggedIn ? (
-                <div className="user-menu" id="userMenu">
+                <div
+                  className={`user-menu ${dropdownOpen ? "is-open" : ""}`}
+                  id="userMenu"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div
                     className="user-avatar"
-                    onClick={() => {
-                      document
-                        .getElementById("userDropdown")
-                        .classList.toggle("is-open");
-                    }}
+                    id="userAvatar"
+                    onClick={() => setDropdownOpen((prev) => !prev)}
                   >
-                    👤
+                    {userName?.charAt(0)?.toUpperCase() || "U"}
                   </div>
-                  <div className="user-dropdown" id="userDropdown">
+                  <div
+                    className={`user-dropdown ${dropdownOpen ? "is-open" : ""}`}
+                    id="userDropdown"
+                  >
                     <div className="user-card">
+                      <div className="user-card__avatar" id="userAvatarBig">
+                        {userName?.charAt(0)?.toUpperCase() || "U"}
+                      </div>
                       <div className="user-card__name" id="userName">
-                        User
+                        {userName}
                       </div>
                     </div>
+
+                    <button
+                      className="dropdown-item"
+                      id="profileBtn"
+                      type="button"
+                    >
+                      Profile
+                    </button>
+
+                    {isAdmin ? (
+                      <button
+                        className="dropdown-item admin-only"
+                        id="adminBtn"
+                        type="button"
+                        onClick={handleAdminPanel}
+                      >
+                        Admin Panel(test)
+                      </button>
+                    ) : null}
+
                     <button
                       className="dropdown-item danger"
-                      onClick={() => setIsLoggedIn(false)}
+                      id="logoutBtn"
+                      type="button"
+                      onClick={handleLogout}
                     >
                       Выйти
                     </button>
@@ -62,13 +300,10 @@ export default function App() {
             </div>
           </header>
 
-          {/* Зона загрузки */}
           <div className="upload-wrap">
             {isLoggedIn ? (
-              // Если залогинен — показываем анализатор
-              <DragDropZone />
+              <DragDropZone key={resetKey} />
             ) : (
-              // Если не залогинен — показываем заглушку
               <div
                 className="upload-box"
                 style={{ cursor: "pointer" }}
@@ -85,7 +320,6 @@ export default function App() {
 
           <div className="grain" aria-hidden="true"></div>
 
-          {/* Модальное окно авторизации */}
           {showAuth && (
             <div
               className="modal-backdrop"
@@ -116,58 +350,33 @@ export default function App() {
                   Sign in to save your uploads and access them from anywhere
                 </p>
 
-                {/* Переключатель Sign In / Sign Up */}
                 <div
                   className="segmented"
                   role="tablist"
                   aria-label="Auth mode"
                 >
                   <button
-                    className={`segmented__btn ${
-                      authMode === "signin" ? "is-active" : ""
-                    }`}
+                    className={`segmented__btn ${authMode === "signin" ? "is-active" : ""}`}
                     type="button"
                     onClick={() => setAuthMode("signin")}
-                    role="tab"
-                    aria-selected={authMode === "signin"}
                   >
                     Sign In
                   </button>
+
                   <button
-                    className={`segmented__btn ${
-                      authMode === "signup" ? "is-active" : ""
-                    }`}
+                    className={`segmented__btn ${authMode === "signup" ? "is-active" : ""}`}
                     type="button"
                     onClick={() => setAuthMode("signup")}
-                    role="tab"
-                    aria-selected={authMode === "signup"}
                   >
                     Sign Up
                   </button>
                 </div>
 
-                {/* Sign In форма */}
                 {authMode === "signin" && (
-                  <form
-                    className="auth-form"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      // TODO: подключить Firebase
-                      setIsLoggedIn(true);
-                      setShowAuth(false);
-                    }}
-                  >
+                  <form className="auth-form" onSubmit={handleSignIn}>
                     <label className="field">
                       <span className="field__label">Email</span>
                       <div className="field__control">
-                        <span className="field__icon">
-                          <img
-                            src="/assets/email.svg"
-                            alt="email"
-                            width="20"
-                            height="20"
-                          />
-                        </span>
                         <input
                           className="field__input"
                           type="email"
@@ -182,14 +391,6 @@ export default function App() {
                     <label className="field">
                       <span className="field__label">Password</span>
                       <div className="field__control">
-                        <span className="field__icon">
-                          <img
-                            src="/assets/Lock.svg"
-                            alt="password"
-                            width="20"
-                            height="20"
-                          />
-                        </span>
                         <input
                           className="field__input"
                           type="password"
@@ -210,28 +411,11 @@ export default function App() {
                   </form>
                 )}
 
-                {/* Sign Up форма */}
                 {authMode === "signup" && (
-                  <form
-                    className="auth-form"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      // TODO: подключить Firebase
-                      setIsLoggedIn(true);
-                      setShowAuth(false);
-                    }}
-                  >
+                  <form className="auth-form" onSubmit={handleSignUp}>
                     <label className="field">
                       <span className="field__label">Nickname</span>
                       <div className="field__control">
-                        <span className="field__icon">
-                          <img
-                            src="/assets/user-profile-03.svg"
-                            alt="user"
-                            width="20"
-                            height="20"
-                          />
-                        </span>
                         <input
                           className="field__input"
                           type="text"
@@ -248,14 +432,6 @@ export default function App() {
                     <label className="field">
                       <span className="field__label">Email</span>
                       <div className="field__control">
-                        <span className="field__icon">
-                          <img
-                            src="/assets/email.svg"
-                            alt="email"
-                            width="20"
-                            height="20"
-                          />
-                        </span>
                         <input
                           className="field__input"
                           type="email"
@@ -270,14 +446,6 @@ export default function App() {
                     <label className="field">
                       <span className="field__label">Password</span>
                       <div className="field__control">
-                        <span className="field__icon">
-                          <img
-                            src="/assets/Lock.svg"
-                            alt="password"
-                            width="20"
-                            height="20"
-                          />
-                        </span>
                         <input
                           className="field__input"
                           type="password"
@@ -300,11 +468,9 @@ export default function App() {
               </div>
             </div>
           )}
-
         </section>
       </main>
 
-      {/* Оверлей для незалогиненных */}
       {!isLoggedIn && !showAuth && (
         <div className="lock-overlay" id="lockOverlay">
           <div className="lock-message">
@@ -315,10 +481,7 @@ export default function App() {
             <p className="lock-text">
               Войдите в аккаунт, чтобы начать анализ изображений
             </p>
-            <button
-              className="lock-btn"
-              onClick={() => setShowAuth(true)}
-            >
+            <button className="lock-btn" onClick={() => setShowAuth(true)}>
               Войти
             </button>
           </div>

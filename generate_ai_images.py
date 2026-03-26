@@ -1,4 +1,23 @@
+"""
+Генерирует AI-изображения через Stable Diffusion 1.5, SDXL и FLUX.1-schnell.
+
+Примеры:
+  python generate_ai.py --model runwayml/stable-diffusion-v1-5 --out dataset/sd15 --count 100
+  python generate_ai.py --model stabilityai/stable-diffusion-xl-base-1.0 --out dataset/sdxl --count 100
+  python generate_ai.py --model black-forest-labs/FLUX.1-schnell --out dataset/flux --count 100
+
+Установка:
+  pip install -U diffusers transformers accelerate safetensors sentencepiece pillow
+  (опционально) pip install xformers
+
+Токен HF (если модель gated):
+  Windows (PowerShell): $env:HF_TOKEN="hf_xxx"
+  Linux/macOS:         export HF_TOKEN="hf_xxx"
+"""
+
 from __future__ import annotations
+
+# ✅ Шаг 1: настройка окружения ДО импортов HuggingFace/diffusers
 import os
 from pathlib import Path
 
@@ -15,6 +34,7 @@ os.environ["TRANSFORMERS_CACHE"] = str(_CACHE / "transformers")
 os.environ["DIFFUSERS_CACHE"] = str(_CACHE / "diffusers")
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
+# ✅ Шаг 2: импорты
 import argparse
 import random
 import time
@@ -29,6 +49,7 @@ from diffusers import (
     EulerDiscreteScheduler,
 )
 
+# -------------------- Промпты --------------------
 
 SUBJECTS = [
     "a middle-aged man", "an elderly woman", "a teenage girl",
@@ -94,6 +115,8 @@ def random_prompt() -> tuple[str, str]:
     return prompt, NEGATIVE
 
 
+# -------------------- Определение типа модели --------------------
+
 def is_flux(model_id: str) -> bool:
     return "flux" in model_id.lower()
 
@@ -101,7 +124,6 @@ def is_flux(model_id: str) -> bool:
 def is_sdxl(model_id: str) -> bool:
     m = model_id.lower()
     return ("xl" in m) and (not is_flux(m))
-
 
 def require_cuda() -> None:
     if not torch.cuda.is_available():
@@ -115,6 +137,24 @@ def try_enable_xformers(pipe) -> None:
     except Exception:
         print("xFormers: not available (this is fine).")
 
+# -------------------- Утилиты --------------------
+
+def require_cuda() -> None:
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "CUDA недоступна. Проверь драйвер NVIDIA и что установлен CUDA-совместимый PyTorch."
+        )
+
+
+def try_enable_xformers(pipe) -> None:
+    try:
+        pipe.enable_xformers_memory_efficient_attention()
+        print("xFormers: включено")
+    except Exception:
+        print("xFormers: не доступен (это нормально).")
+
+
+# -------------------- Загрузка пайплайнов --------------------
 
 def load_pipeline_sd15(model_id: str) -> StableDiffusionPipeline:
     print("Type: Stable Diffusion 1.5")
@@ -138,17 +178,17 @@ def load_pipeline_sd15(model_id: str) -> StableDiffusionPipeline:
     return pipe
 
 
-def load_pipeline_sdxl(model_id: str) -> StableDiffusionXLPipeline:
-    print("Type: Stable Diffusion XL")
-    pipe = StableDiffusionXLPipeline.from_pretrained(
+def load_pipeline_flux(model_id: str) -> FluxPipeline:
+    print("Type: FLUX.1 (schnell)")
+    pipe = FluxPipeline.from_pretrained(
         model_id,
         torch_dtype=torch.float16,
         use_safetensors=True,
-        variant="fp16",
         token=os.environ.get("HF_TOKEN"),
     )
     pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config)
 
+    # Для 12GB комфортнее offload (медленнее, но меньше OOM)
     pipe.enable_model_cpu_offload()
     pipe.enable_attention_slicing()
     try_enable_xformers(pipe)
@@ -156,7 +196,7 @@ def load_pipeline_sdxl(model_id: str) -> StableDiffusionXLPipeline:
 
 
 def load_pipeline_flux(model_id: str) -> FluxPipeline:
-    print("Type: FLUX.1 (schnell)")
+    print("Тип: FLUX.1 (schnell)")
     pipe = FluxPipeline.from_pretrained(
         model_id,
         torch_dtype=torch.float16,
@@ -173,14 +213,22 @@ def load_pipeline_flux(model_id: str) -> FluxPipeline:
 
 
 def load_pipeline(model_id: str):
-    print(f"Loading model: {model_id}")
-    print("The first run will download weights — please wait...\n")
+    print(f"Загрузка модели: {model_id}")
+    print("Первый запуск скачает веса — подожди...\n")
 
     if is_flux(model_id):
         return load_pipeline_flux(model_id)
     if is_sdxl(model_id):
         return load_pipeline_sdxl(model_id)
     return load_pipeline_sd15(model_id)
+
+def get_image_size(model_id: str) -> tuple[int, int]:
+    # FLUX/SDXL: 1024, SD1.5: 512
+    if is_flux(model_id) or is_sdxl(model_id):
+        return 1024, 1024
+    return 512, 512
+
+# -------------------- Параметры генерации --------------------
 
 def get_image_size(model_id: str) -> tuple[int, int]:
     # FLUX/SDXL: 1024, SD1.5: 512
@@ -196,6 +244,8 @@ def get_defaults(model_id: str) -> tuple[int, float]:
         return 25, 6.5
     return 25, 7.0
 
+
+# -------------------- Генерация --------------------
 
 def generate(
     out_dir: Path,
@@ -222,6 +272,8 @@ def generate(
 
     pipe = load_pipeline(model_id)
 
+    pipe = load_pipeline(model_id)
+
     default_w, default_h = get_image_size(model_id)
     w = width or default_w
     h = height or default_h
@@ -233,12 +285,13 @@ def generate(
     use_flux = is_flux(model_id)
     use_sdxl = is_sdxl(model_id)
 
+    # Для моделей с CPU offload (SDXL/FLUX) безопаснее генератор на CPU
     gen_device = "cpu" if (use_flux or use_sdxl) else "cuda"
 
-    print(f"Image size         : {w}×{h}")
+    print(f"Размер изображений : {w}×{h}")
     print(f"steps/cfg          : {steps} / {cfg}")
     print(f"generator device   : {gen_device}")
-    print(f"Generating {count - start_i} images into {out_dir}\n")
+    print(f"Генерация {count - start_i} изображений в {out_dir}\n")
 
     t0 = time.time()
 
@@ -250,6 +303,7 @@ def generate(
 
         try:
             if use_flux:
+                # negative_prompt может не поддерживаться в FLUX в твоей версии diffusers
                 result = pipe(
                     prompt=prompt,
                     width=w,
@@ -293,42 +347,43 @@ def generate(
             torch.cuda.empty_cache()
             continue
         except TypeError as e:
-            print(f"[{i+1:>4}/{count}] Pipeline call error: {e}")
-            print(
-                "Tip: update diffusers/transformers or remove unsupported arguments "
-                "(width/height/negative_prompt)."
-            )
+            # Частая проблема: сигнатура пайплайна отличается (аргументы не поддерживаются)
+            print(f"[{i+1:>4}/{count}] Ошибка вызова pipeline: {e}")
+            print("Совет: обнови diffusers/transformers или убери неподдерживаемые аргументы (width/height/negative_prompt).")
             raise
 
     total = time.time() - t0
     generated = count - start_i
-    print(f"\nDone! Generated {generated} images in {total/60:.1f} minutes")
-    print(f"Folder: {out_dir.resolve()}")
+    print(f"\nГотово! Сгенерировано {generated} изображений за {total/60:.1f} минут")
+    print(f"Папка: {out_dir.resolve()}")
+
+
+# -------------------- CLI --------------------
 
 def main() -> None:
     warnings.filterwarnings("ignore", category=UserWarning)
 
     parser = argparse.ArgumentParser(
-        description="AI image generator (SD 1.5 / SDXL / FLUX.1-schnell)"
+        description="Генератор AI-изображений (SD 1.5 / SDXL / FLUX.1-schnell)"
     )
-    parser.add_argument("--out", default="dataset/ai", help="Output folder for saving images")
-    parser.add_argument("--count", type=int, default=1000, help="Number of images")
+    parser.add_argument("--out", default="dataset/ai", help="Папка для сохранения изображений")
+    parser.add_argument("--count", type=int, default=1000, help="Количество изображений")
     parser.add_argument(
         "--model",
         default="runwayml/stable-diffusion-v1-5",
         help=(
-            "HuggingFace model ID: "
+            "ID модели на HuggingFace: "
             "runwayml/stable-diffusion-v1-5 | "
             "stabilityai/stable-diffusion-xl-base-1.0 | "
             "black-forest-labs/FLUX.1-schnell"
         ),
     )
-    parser.add_argument("--seed", type=int, default=42, help="Base seed (each image gets seed+i)")
+    parser.add_argument("--seed", type=int, default=42, help="Базовый seed (каждое фото получит seed+i)")
 
-    parser.add_argument("--steps", type=int, default=None, help="Diffusion steps (model-dependent by default)")
-    parser.add_argument("--cfg", type=float, default=None, help="Guidance scale (model-dependent by default)")
-    parser.add_argument("--width", type=int, default=None, help="Width (model-dependent by default)")
-    parser.add_argument("--height", type=int, default=None, help="Height (model-dependent by default)")
+    parser.add_argument("--steps", type=int, default=None, help="Шаги диффузии (по умолчанию зависят от модели)")
+    parser.add_argument("--cfg", type=float, default=None, help="Guidance scale (по умолчанию зависит от модели)")
+    parser.add_argument("--width", type=int, default=None, help="Ширина (по умолчанию зависит от модели)")
+    parser.add_argument("--height", type=int, default=None, help="Высота (по умолчанию зависит от модели)")
 
     args = parser.parse_args()
 
@@ -338,9 +393,9 @@ def main() -> None:
 
     print(f"Device     : {device_name}")
     print(f"VRAM       : {vram_gb:.1f} GB")
-    print(f"Model      : {args.model}")
-    print(f"Count      : {args.count}")
-    print(f"Output     : {args.out}\n")
+    print(f"Модель     : {args.model}")
+    print(f"Количество : {args.count}")
+    print(f"Выход      : {args.out}\n")
 
     generate(
         out_dir=Path(args.out),
