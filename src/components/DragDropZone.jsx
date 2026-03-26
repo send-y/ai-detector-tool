@@ -1,19 +1,115 @@
-// src/components/DragDropZone.jsx
-
 import { useState, useCallback } from "react";
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 
 const API_URL = "http://localhost:5000/api/analyze";
 
-export default function DragDropZone() {
-  const [isDragging, setIsDragging] = useState(false);
-  const [isLoading,  setIsLoading]  = useState(false);
-  const [result,     setResult]     = useState(null);
-  const [error,      setError]      = useState(null);
-  const [preview,    setPreview]    = useState(null);
+const firebaseConfig = {
+  apiKey: "AIzaSyDPNat2fnQsRmLQNSiajNDBQCqiqWaJXew",
+  authDomain: "db-register-e2b63.firebaseapp.com",
+  projectId: "db-register-e2b63",
+  storageBucket: "db-register-e2b63.firebasestorage.app",
+  messagingSenderId: "221112421572",
+  appId: "1:221112421572:web:093e87ef2c46e0bc7dcd91",
+  measurementId: "G-7HL2JGNJRX",
+};
 
-  // ---------------------------------------------------------------------------
-  // Drag & Drop handlers
-  // ---------------------------------------------------------------------------
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+function fileToThumbnailDataUrl(file, size = 30, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Не удалось создать canvas"));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, size, size);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function fileToResizedDataUrl(file, maxSize = 500, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const img = new Image();
+
+      img.onload = () => {
+        let { width, height } = img;
+
+        if (width > height) {
+          if (width > maxSize) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Не удалось создать canvas"));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function normalizeLabel(label) {
+  return label === "AI-generated" ? "ai" : "real";
+}
+
+export default function DragDropZone({ onAnalysisSaved }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [preview, setPreview] = useState(null);
 
   const onDragOver = useCallback((e) => {
     e.preventDefault();
@@ -36,12 +132,7 @@ export default function DragDropZone() {
     if (file) handleFile(file);
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // Отправка на сервер
-  // ---------------------------------------------------------------------------
-
   const handleFile = async (file) => {
-    // Превью
     setPreview(URL.createObjectURL(file));
     setResult(null);
     setError(null);
@@ -53,7 +144,7 @@ export default function DragDropZone() {
 
       const response = await fetch(API_URL, {
         method: "POST",
-        body:   formData,
+        body: formData,
       });
 
       const data = await response.json();
@@ -64,6 +155,33 @@ export default function DragDropZone() {
 
       setResult(data);
 
+      const user = auth.currentUser;
+      if (user) {
+        const thumbUrl = await fileToThumbnailDataUrl(file, 30, 0.6);
+        const imageUrl = await fileToResizedDataUrl(file, 500, 0.8);
+        const probability = Number(data?.probability) || 0;
+        const label = normalizeLabel(data?.label);
+
+        const ref = await addDoc(
+          collection(db, "users", user.uid, "analyses"),
+          {
+            thumbUrl,
+            imageUrl,
+            label,
+            percent: Math.round(probability * 100),
+            createdAt: serverTimestamp(),
+          }
+        );
+
+        onAnalysisSaved?.({
+          id: ref.id,
+          thumbUrl,
+          imageUrl,
+          label,
+          percent: Math.round(probability * 100),
+          createdAt: new Date().toISOString(),
+        });
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -71,35 +189,28 @@ export default function DragDropZone() {
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
-
-  const prob    = result?.probability ?? 0;
-  const filled  = Math.round(prob * 20);
-  const isAI    = result?.label === "AI-generated";
+  const prob = result?.probability ?? 0;
+  const isAI = result?.label === "AI-generated";
 
   return (
     <div style={styles.wrapper}>
-
-      {/* Зона загрузки */}
       <div
         style={{
           ...styles.dropzone,
           borderColor: isDragging ? "#4f8ef7" : "#555",
-          background:  isDragging ? "#1a2a3a" : "#1a1a2e",
+          background: isDragging ? "#1a2a3a" : "#1a1a2e",
         }}
-        onDragOver  = {onDragOver}
-        onDragLeave = {onDragLeave}
-        onDrop      = {onDrop}
-        onClick     = {() => document.getElementById("fileInput").click()}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        onClick={() => document.getElementById("fileInput")?.click()}
       >
         <input
-          id       = "fileInput"
-          type     = "file"
-          accept   = "image/*"
-          style    = {{ display: "none" }}
-          onChange = {onFileInput}
+          id="fileInput"
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={onFileInput}
         />
 
         {preview ? (
@@ -115,39 +226,30 @@ export default function DragDropZone() {
         )}
       </div>
 
-      {/* Загрузка */}
       {isLoading && (
-        <div style={styles.loading}>
-          ⏳ Анализируем изображение...
-        </div>
+        <div style={styles.loading}>⏳ Анализируем изображение...</div>
       )}
 
-      {/* Ошибка */}
-      {error && (
-        <div style={styles.error}>
-          ❌ {error}
-        </div>
-      )}
+      {error && <div style={styles.error}>❌ {error}</div>}
 
-      {/* Результат */}
       {result && (
         <div style={styles.result}>
-
-          {/* Вердикт */}
-          <div style={{
-            ...styles.verdict,
-            background: isAI ? "#3a1a1a" : "#1a3a1a",
-            borderColor: isAI ? "#e74c3c" : "#2ecc71",
-          }}>
-            <span style={{ fontSize: 36 }}>
-              {isAI ? "🤖" : "📷"}
-            </span>
+          <div
+            style={{
+              ...styles.verdict,
+              background: isAI ? "#3a1a1a" : "#1a3a1a",
+              borderColor: isAI ? "#e74c3c" : "#2ecc71",
+            }}
+          >
+            <span style={{ fontSize: 36 }}>{isAI ? "🤖" : "📷"}</span>
             <div>
-              <div style={{
-                fontSize: 22,
-                fontWeight: "bold",
-                color: isAI ? "#e74c3c" : "#2ecc71",
-              }}>
+              <div
+                style={{
+                  fontSize: 22,
+                  fontWeight: "bold",
+                  color: isAI ? "#e74c3c" : "#2ecc71",
+                }}
+              >
                 {result.label}
               </div>
               <div style={{ color: "#aaa", fontSize: 14 }}>
@@ -156,24 +258,22 @@ export default function DragDropZone() {
             </div>
           </div>
 
-          {/* Шкала */}
           <div style={styles.barWrapper}>
             <span style={{ color: "#2ecc71" }}>Real</span>
             <div style={styles.barTrack}>
-              <div style={{
-                ...styles.barFill,
-                width:      `${prob * 100}%`,
-                background: isAI ? "#e74c3c" : "#2ecc71",
-              }} />
+              <div
+                style={{
+                  ...styles.barFill,
+                  width: `${prob * 100}%`,
+                  background: isAI ? "#e74c3c" : "#2ecc71",
+                }}
+              />
             </div>
             <span style={{ color: "#e74c3c" }}>AI</span>
           </div>
 
-          {/* Метрики */}
           <details style={styles.details}>
-            <summary style={styles.summary}>
-              Подробные метрики
-            </summary>
+            <summary style={styles.summary}>Подробные метрики</summary>
             <table style={styles.table}>
               <tbody>
                 {Object.entries(result.metrics).map(([key, val]) => (
@@ -188,10 +288,9 @@ export default function DragDropZone() {
             </table>
           </details>
 
-          {/* Кнопка сброса */}
           <button
-            style   = {styles.resetBtn}
-            onClick = {() => {
+            style={styles.resetBtn}
+            onClick={() => {
               setResult(null);
               setPreview(null);
               setError(null);
@@ -199,124 +298,119 @@ export default function DragDropZone() {
           >
             Проверить другое фото
           </button>
-
         </div>
       )}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Стили
-// ---------------------------------------------------------------------------
-
 const styles = {
   wrapper: {
-    maxWidth:  600,
-    margin:    "0 auto",
-    padding:   20,
+    maxWidth: 600,
+    margin: "0 auto",
+    padding: 20,
     fontFamily: "sans-serif",
-    color:     "#fff",
+    color: "#fff",
   },
   dropzone: {
-    border:       "2px dashed #555",
+    border: "2px dashed #555",
     borderRadius: 12,
-    padding:      32,
-    textAlign:    "center",
-    cursor:       "pointer",
-    minHeight:    200,
-    display:      "flex",
-    alignItems:   "center",
+    padding: 32,
+    textAlign: "center",
+    cursor: "pointer",
+    minHeight: 200,
+    display: "flex",
+    alignItems: "center",
     justifyContent: "center",
-    transition:   "all 0.2s",
+    transition: "all 0.2s",
   },
   placeholder: {
     color: "#888",
   },
   preview: {
-    maxWidth:     "100%",
-    maxHeight:    300,
+    maxWidth: "100%",
+    maxHeight: 300,
     borderRadius: 8,
   },
   loading: {
-    textAlign:  "center",
-    padding:    16,
-    color:      "#aaa",
-    fontSize:   16,
+    textAlign: "center",
+    padding: 16,
+    color: "#aaa",
+    fontSize: 16,
   },
   error: {
-    background:   "#3a1a1a",
-    border:       "1px solid #e74c3c",
+    background: "#3a1a1a",
+    border: "1px solid #e74c3c",
     borderRadius: 8,
-    padding:      12,
-    marginTop:    12,
-    color:        "#e74c3c",
+    padding: 12,
+    marginTop: 12,
+    color: "#e74c3c",
   },
   result: {
     marginTop: 20,
   },
   verdict: {
-    display:      "flex",
-    alignItems:   "center",
-    gap:          16,
-    padding:      20,
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+    padding: 20,
     borderRadius: 12,
-    border:       "1px solid",
+    border: "1px solid",
     marginBottom: 16,
   },
   barWrapper: {
-    display:    "flex",
+    display: "flex",
     alignItems: "center",
-    gap:        10,
+    gap: 10,
     marginBottom: 16,
   },
   barTrack: {
-    flex:         1,
-    height:       12,
-    background:   "#333",
+    flex: 1,
+    height: 12,
+    background: "#333",
     borderRadius: 6,
-    overflow:     "hidden",
+    overflow: "hidden",
   },
   barFill: {
-    height:     "100%",
+    height: "100%",
     borderRadius: 6,
     transition: "width 0.5s ease",
   },
   details: {
-    background:   "#111",
+    background: "#111",
     borderRadius: 8,
-    padding:      12,
+    padding: 12,
     marginBottom: 12,
   },
   summary: {
-    cursor:     "pointer",
-    color:      "#aaa",
-    fontSize:   14,
+    cursor: "pointer",
+    color: "#aaa",
+    fontSize: 14,
     marginBottom: 8,
   },
   table: {
-    width:       "100%",
+    width: "100%",
     borderCollapse: "collapse",
-    fontSize:    13,
+    fontSize: 13,
   },
   tdKey: {
-    padding:    "4px 8px",
-    color:      "#888",
-    width:      "50%",
+    padding: "4px 8px",
+    color: "#888",
+    width: "50%",
   },
   tdVal: {
-    padding:    "4px 8px",
-    color:      "#fff",
+    padding: "4px 8px",
+    color: "#fff",
     fontFamily: "monospace",
   },
   resetBtn: {
-    width:        "100%",
-    padding:      12,
-    background:   "#4f8ef7",
-    color:        "#fff",
-    border:       "none",
+    width: "100%",
+    padding: 12,
+    background: "#4f8ef7",
+    color: "#fff",
+    border: "none",
     borderRadius: 8,
-    cursor:       "pointer",
-    fontSize:     15,
+    cursor: "pointer",
+    fontSize: 15,
   },
 };

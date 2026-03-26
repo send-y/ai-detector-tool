@@ -16,4 +16,4 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-window.__fb = { app, auth, db }
+window.__fb = { app, auth, db };
