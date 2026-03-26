@@ -1,6 +1,7 @@
 import "./index.css";
 import { useEffect, useState } from "react";
 import DragDropZone from "./components/DragDropZone";
+import AdminPanel from "./components/AdminPanel";
 
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
@@ -67,6 +68,57 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [analysisHistory, setAnalysisHistory] = useState([]);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  const [language, setLanguage] = useState("en");
+
+  const t = {
+    signIn: language === "en" ? "Sign In" : "Увійти",
+    signUp: language === "en" ? "Sign Up" : "Реєстрація",
+    welcomeTitle:
+      language === "en" ? "Welcome to LANDER" : "Ласкаво просимо до LANDER",
+    welcomeSub:
+      language === "en"
+        ? "Sign in to save your uploads and access them from anywhere"
+        : "Увійдіть, щоб зберігати завантаження та мати доступ до них звідусіль",
+    authMode: language === "en" ? "Auth mode" : "Режим авторизації",
+    nickname: language === "en" ? "Nickname" : "Нікнейм",
+    email: language === "en" ? "Email" : "Електронна пошта",
+    password: language === "en" ? "Password" : "Пароль",
+    enterEmail:
+      language === "en" ? "Enter your email" : "Введіть вашу пошту",
+    enterPassword:
+      language === "en" ? "Enter your password" : "Введіть ваш пароль",
+    createPassword:
+      language === "en" ? "Create a password" : "Створіть пароль",
+    enterNickname:
+      language === "en" ? "Enter your nickname" : "Введіть ваш нікнейм",
+    historyTitle: language === "en" ? "Analysis History" : "Історія аналізів",
+    historyEmpty: language === "en" ? "No analyses yet" : "Поки немає аналізів",
+    lastAnalysis:
+      language === "en" ? "Latest analysis" : "Останній аналіз",
+    itemsCount: (count) =>
+      language === "en" ? `${count} items` : `${count} шт.`,
+    adminPanel:
+      language === "en" ? "Admin Panel(test)" : "Адмін-панель(test)",
+    logout: language === "en" ? "Log Out" : "Вийти",
+    uploadDropTitle:
+      language === "en" ? "Drop your photo here" : "Перетягніть фото сюди",
+    uploadDropSub:
+      language === "en" ? "or click to choose" : "або натисніть для вибору",
+    historyModalTitle:
+      language === "en" ? "Analysis History" : "Історія аналізів",
+    photosCount: (count) =>
+      language === "en" ? `${count} photos` : `${count} фото`,
+    loginRequired:
+      language === "en" ? "Sign in required" : "Потрібен вхід",
+    loginRequiredSub:
+      language === "en"
+        ? "Sign in to your account to start image analysis"
+        : "Увійдіть в акаунт, щоб почати аналіз зображень",
+    loginAction: language === "en" ? "Sign In" : "Увійти",
+    loading: language === "en" ? "Loading..." : "Завантаження...",
+    close: language === "en" ? "Close" : "Закрити",
+  };
 
   const isAdmin = String(userRole).trim().toLowerCase() === "admin";
 
@@ -122,11 +174,8 @@ export default function App() {
         const snap = await getDoc(ref);
 
         const profile = snap.exists() ? snap.data() : null;
-        const nickname =
-          profile?.nickname || user.email?.split("@")[0] || "User";
-        const role = String(profile?.role || "user")
-          .trim()
-          .toLowerCase();
+        const nickname = profile?.nickname || user.email?.split("@")[0] || "User";
+        const role = String(profile?.role || "user").trim().toLowerCase();
 
         setUserName(nickname);
         setUserRole(role);
@@ -182,58 +231,56 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleSignIn = async (e) => {
-    e.preventDefault();
+const handleSignIn = async (e) => {
+  e.preventDefault();
 
-    const formData = new FormData(e.currentTarget);
-    const email = String(formData.get("email") || "").trim();
-    const password = String(formData.get("password") || "");
+  const form = e.currentTarget;
+  const formData = new FormData(form);
+  const email = String(formData.get("email") || "").trim();
+  const password = String(formData.get("password") || "");
 
-    if (!email || !password) {
-      alert("Введи email и пароль");
-      return;
-    }
+  if (!email || !password) {
+    return;
+  }
 
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      e.currentTarget.reset();
-      setShowAuth(false);
-    } catch (err) {
-      console.error(err);
-      alert(prettyAuthError(err));
-    }
-  };
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    form.reset();
+    setShowAuth(false);
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   const handleSignUp = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    const formData = new FormData(e.currentTarget);
-    const nickname = String(formData.get("nickname") || "").trim();
-    const email = String(formData.get("email") || "").trim();
-    const password = String(formData.get("password") || "");
+  const form = e.currentTarget;
+  const formData = new FormData(form);
+  const nickname = String(formData.get("nickname") || "").trim();
+  const email = String(formData.get("email") || "").trim();
+  const password = String(formData.get("password") || "");
 
-    if (!nickname || !email || !password) {
-      alert("Заполни nickname, email и пароль");
-      return;
-    }
+  if (!nickname || !email || !password) {
+    return;
+  }
 
-    try {
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
 
-      await setDoc(doc(db, "users", cred.user.uid), {
-        nickname,
-        email,
-        role: "user",
-        createdAt: serverTimestamp(),
-      });
+    await setDoc(doc(db, "users", cred.user.uid), {
+      nickname,
+      email,
+      role: "user",
+      createdAt: serverTimestamp(),
+    });
 
-      e.currentTarget.reset();
-      setShowAuth(false);
-    } catch (err) {
-      console.error(err);
-      alert(prettyAuthError(err));
-    }
-  };
+    form.reset();
+    setShowAuth(false);
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   const handleLogout = async () => {
     try {
@@ -250,7 +297,8 @@ export default function App() {
   };
 
   const handleAdminPanel = () => {
-    window.location.href = "/admin";
+    setDropdownOpen(false);
+    setAdminPanelOpen(true);
   };
 
   const handleAnalysisSaved = (item) => {
@@ -258,7 +306,7 @@ export default function App() {
   };
 
   if (loading) {
-    return <div className="loading-screen">Loading...</div>;
+    return <div className="loading-screen">{t.loading}</div>;
   }
 
   return (
@@ -285,6 +333,30 @@ export default function App() {
             </div>
 
             <div className="topbar__right">
+              <div
+                className={`lang-switch ${language === "uk" ? "is-uk" : "is-en"}`}
+                role="group"
+                aria-label="Language switch"
+              >
+                <button
+                  type="button"
+                  className={`lang-switch__option ${language === "en" ? "is-active" : ""}`}
+                  onClick={() => setLanguage("en")}
+                >
+                  EN
+                </button>
+
+                <button
+                  type="button"
+                  className={`lang-switch__option ${language === "uk" ? "is-active" : ""}`}
+                  onClick={() => setLanguage("uk")}
+                >
+                  UA
+                </button>
+
+                <span className="lang-switch__thumb" aria-hidden="true" />
+              </div>
+
               {isLoggedIn ? (
                 <div
                   className={`user-menu ${dropdownOpen ? "is-open" : ""}`}
@@ -314,12 +386,12 @@ export default function App() {
 
                     <div className="profile-history">
                       <div className="profile-history__title">
-                        История анализов
+                        {t.historyTitle}
                       </div>
 
                       {analysisHistory.length === 0 ? (
                         <div className="profile-history__empty">
-                          Пока нет анализов
+                          {t.historyEmpty}
                         </div>
                       ) : (
                         <button
@@ -337,12 +409,16 @@ export default function App() {
                           />
                           <div className="analysis-item__text">
                             <div
-                              className={`analysis-item__label ${analysisHistory[0].label === "ai" ? "is-ai" : "is-real"}`}
+                              className={`analysis-item__label ${
+                                analysisHistory[0].label === "ai"
+                                  ? "is-ai"
+                                  : "is-real"
+                              }`}
                             >
-                              Последний анализ
+                              {t.lastAnalysis}
                             </div>
                             <div className="analysis-item__percent">
-                              {analysisHistory.length} шт.
+                              {t.itemsCount(analysisHistory.length)}
                             </div>
                           </div>
                         </button>
@@ -356,7 +432,7 @@ export default function App() {
                         type="button"
                         onClick={handleAdminPanel}
                       >
-                        Admin Panel(test)
+                        {t.adminPanel}
                       </button>
                     ) : null}
 
@@ -366,7 +442,7 @@ export default function App() {
                       type="button"
                       onClick={handleLogout}
                     >
-                      Выйти
+                      {t.logout}
                     </button>
                   </div>
                 </div>
@@ -376,7 +452,7 @@ export default function App() {
                   type="button"
                   onClick={() => setShowAuth(true)}
                 >
-                  Sign In
+                  {t.signIn}
                 </button>
               )}
             </div>
@@ -385,9 +461,10 @@ export default function App() {
           <div className="upload-wrap">
             {isLoggedIn ? (
               <DragDropZone
-                key={resetKey}
-                onAnalysisSaved={handleAnalysisSaved}
-              />
+  key={resetKey}
+  onAnalysisSaved={handleAnalysisSaved}
+  language={language}
+/>
             ) : (
               <div
                 className="upload-box"
@@ -396,8 +473,8 @@ export default function App() {
               >
                 <div className="upload-placeholder">
                   <div className="upload-icon">+</div>
-                  <p className="upload-title">Перетащите фото сюда</p>
-                  <p className="upload-sub">или нажмите для выбора</p>
+                  <p className="upload-title">{t.uploadDropTitle}</p>
+                  <p className="upload-sub">{t.uploadDropSub}</p>
                 </div>
               </div>
             )}
@@ -423,50 +500,53 @@ export default function App() {
                   className="modal__close"
                   type="button"
                   onClick={() => setShowAuth(false)}
-                  aria-label="Close"
+                  aria-label={t.close}
                 >
                   ✕
                 </button>
 
                 <h2 className="modal__title" id="authTitle">
-                  Welcome to LANDER
+                  {t.welcomeTitle}
                 </h2>
-                <p className="modal__sub">
-                  Sign in to save your uploads and access them from anywhere
-                </p>
+
+                <p className="modal__sub">{t.welcomeSub}</p>
 
                 <div
                   className="segmented"
                   role="tablist"
-                  aria-label="Auth mode"
+                  aria-label={t.authMode}
                 >
                   <button
-                    className={`segmented__btn ${authMode === "signin" ? "is-active" : ""}`}
+                    className={`segmented__btn ${
+                      authMode === "signin" ? "is-active" : ""
+                    }`}
                     type="button"
                     onClick={() => setAuthMode("signin")}
                   >
-                    Sign In
+                    {t.signIn}
                   </button>
 
                   <button
-                    className={`segmented__btn ${authMode === "signup" ? "is-active" : ""}`}
+                    className={`segmented__btn ${
+                      authMode === "signup" ? "is-active" : ""
+                    }`}
                     type="button"
                     onClick={() => setAuthMode("signup")}
                   >
-                    Sign Up
+                    {t.signUp}
                   </button>
                 </div>
 
                 {authMode === "signin" && (
                   <form className="auth-form" onSubmit={handleSignIn}>
                     <label className="field">
-                      <span className="field__label">Email</span>
+                      <span className="field__label">{t.email}</span>
                       <div className="field__control">
                         <input
                           className="field__input"
                           type="email"
                           name="email"
-                          placeholder="Enter your email"
+                          placeholder={t.enterEmail}
                           autoComplete="email"
                           required
                         />
@@ -474,13 +554,13 @@ export default function App() {
                     </label>
 
                     <label className="field">
-                      <span className="field__label">Password</span>
+                      <span className="field__label">{t.password}</span>
                       <div className="field__control">
                         <input
                           className="field__input"
                           type="password"
                           name="password"
-                          placeholder="Enter your password"
+                          placeholder={t.enterPassword}
                           autoComplete="current-password"
                           required
                         />
@@ -491,7 +571,7 @@ export default function App() {
                       className="btn btn--primary btn--full"
                       type="submit"
                     >
-                      Sign In
+                      {t.signIn}
                     </button>
                   </form>
                 )}
@@ -499,13 +579,13 @@ export default function App() {
                 {authMode === "signup" && (
                   <form className="auth-form" onSubmit={handleSignUp}>
                     <label className="field">
-                      <span className="field__label">Nickname</span>
+                      <span className="field__label">{t.nickname}</span>
                       <div className="field__control">
                         <input
                           className="field__input"
                           type="text"
                           name="nickname"
-                          placeholder="Enter your nickname"
+                          placeholder={t.enterNickname}
                           autoComplete="username"
                           required
                           minLength={3}
@@ -515,13 +595,13 @@ export default function App() {
                     </label>
 
                     <label className="field">
-                      <span className="field__label">Email</span>
+                      <span className="field__label">{t.email}</span>
                       <div className="field__control">
                         <input
                           className="field__input"
                           type="email"
                           name="email"
-                          placeholder="Enter your email"
+                          placeholder={t.enterEmail}
                           autoComplete="email"
                           required
                         />
@@ -529,13 +609,13 @@ export default function App() {
                     </label>
 
                     <label className="field">
-                      <span className="field__label">Password</span>
+                      <span className="field__label">{t.password}</span>
                       <div className="field__control">
                         <input
                           className="field__input"
                           type="password"
                           name="password"
-                          placeholder="Create a password"
+                          placeholder={t.createPassword}
                           autoComplete="new-password"
                           required
                         />
@@ -546,7 +626,7 @@ export default function App() {
                       className="btn btn--primary btn--full"
                       type="submit"
                     >
-                      Sign Up
+                      {t.signUp}
                     </button>
                   </form>
                 )}
@@ -574,9 +654,9 @@ export default function App() {
             </button>
 
             <div className="analysis-modal__header">
-              <h3 className="analysis-modal__title">История анализов</h3>
+              <h3 className="analysis-modal__title">{t.historyModalTitle}</h3>
               <div className="analysis-modal__count">
-                {analysisHistory.length} фото
+                {t.photosCount(analysisHistory.length)}
               </div>
             </div>
 
@@ -591,7 +671,9 @@ export default function App() {
 
                   <div className="analysis-history-card__body">
                     <div
-                      className={`analysis-history-card__label ${item.label === "ai" ? "is-ai" : "is-real"}`}
+                      className={`analysis-history-card__label ${
+                        item.label === "ai" ? "is-ai" : "is-real"
+                      }`}
                     >
                       {item.label === "ai" ? "AI" : "Real"}
                     </div>
@@ -613,16 +695,21 @@ export default function App() {
             <div className="lock-icon">
               <img src="/assets/Lock.svg" alt="lock" />
             </div>
-            <h2 className="lock-title">Требуется вход</h2>
-            <p className="lock-text">
-              Войдите в аккаунт, чтобы начать анализ изображений
-            </p>
+            <h2 className="lock-title">{t.loginRequired}</h2>
+            <p className="lock-text">{t.loginRequiredSub}</p>
             <button className="lock-btn" onClick={() => setShowAuth(true)}>
-              Войти
+              {t.loginAction}
             </button>
           </div>
         </div>
       )}
+
+      {adminPanelOpen && isAdmin && (
+  <AdminPanel
+    onClose={() => setAdminPanelOpen(false)}
+    language={language}
+  />
+)}
     </div>
   );
 }

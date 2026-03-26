@@ -1,14 +1,19 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import {
   getFirestore,
   collection,
-  addDoc,
+  doc,
+  setDoc,
+  updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
 
 const API_URL = "http://localhost:5000/api/analyze";
+
+const CLOUDINARY_CLOUD_NAME = "dy84hmzuj";
+const CLOUDINARY_UPLOAD_PRESET = "lander_unsigned";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDPNat2fnQsRmLQNSiajNDBQCqiqWaJXew",
@@ -24,121 +29,149 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-function fileToThumbnailDataUrl(file, size = 30, quality = 0.7) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      const img = new Image();
-
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = size;
-        canvas.height = size;
-
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          reject(new Error("Не удалось создать canvas"));
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, size, size);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-
-      img.onerror = reject;
-      img.src = reader.result;
-    };
-
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function fileToResizedDataUrl(file, maxSize = 500, quality = 0.8) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      const img = new Image();
-
-      img.onload = () => {
-        let { width, height } = img;
-
-        if (width > height) {
-          if (width > maxSize) {
-            height = Math.round((height * maxSize) / width);
-            width = maxSize;
-          }
-        } else {
-          if (height > maxSize) {
-            width = Math.round((width * maxSize) / height);
-            height = maxSize;
-          }
-        }
-
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          reject(new Error("Не удалось создать canvas"));
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-
-      img.onerror = reject;
-      img.src = reader.result;
-    };
-
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 function normalizeLabel(label) {
   return label === "AI-generated" ? "ai" : "real";
 }
 
-export default function DragDropZone({ onAnalysisSaved }) {
+async function uploadImageToCloudinary(file, userId, analysisId) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  formData.append("folder", `lander_uploads/${userId}`);
+  formData.append("public_id", analysisId);
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error?.message || "Cloudinary upload error");
+  }
+
+  return {
+    secureUrl: data.secure_url,
+    publicId: data.public_id,
+    assetId: data.asset_id,
+    width: data.width,
+    height: data.height,
+    format: data.format,
+    bytes: data.bytes,
+  };
+}
+
+export default function DragDropZone({ onAnalysisSaved, language = "en" }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [preview, setPreview] = useState(null);
 
-  const onDragOver = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [lastAnalysisId, setLastAnalysisId] = useState(null);
+  const [isSavingFeedback, setIsSavingFeedback] = useState(false);
 
-  const onDragLeave = useCallback(() => {
-    setIsDragging(false);
-  }, []);
+  const t = useMemo(() => {
+    const isUk = language === "uk";
 
-  const onDrop = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  }, []);
+    return {
+      unauthorized: isUk
+        ? "Користувач не авторизований"
+        : "User is not authorized",
 
-  const onFileInput = useCallback((e) => {
-    const file = e.target.files[0];
-    if (file) handleFile(file);
-  }, []);
+      analysisServerError: isUk
+        ? "Помилка сервера аналізу"
+        : "Analysis server error",
+
+      analyzeFailed: isUk
+        ? "Не вдалося виконати аналіз"
+        : "Failed to analyze image",
+
+      feedbackSaveFailed: isUk
+        ? "Не вдалося зберегти відповідь"
+        : "Failed to save response",
+
+      lastAnalysisNotFound: isUk
+        ? "Не знайдено ID останнього аналізу"
+        : "Latest analysis ID not found",
+
+      cloudinaryUploadError: isUk
+        ? "Помилка завантаження в Cloudinary"
+        : "Cloudinary upload error",
+
+      dropText: isUk
+        ? "Перетягни фото сюди або натисни для вибору"
+        : "Drop a photo here or click to choose",
+
+      fileTypes: isUk
+        ? "JPG, PNG, WEBP — до 10MB"
+        : "JPG, PNG, WEBP — up to 10MB",
+
+      analyzing: isUk
+        ? "⏳ Аналізуємо зображення..."
+        : "⏳ Analyzing image...",
+
+      aiProbability: isUk ? "Ймовірність ШІ" : "AI probability",
+
+      real: "Real",
+      ai: "AI",
+
+      metricsTitle: isUk ? "Детальні метрики" : "Detailed metrics",
+
+      checkAnotherPhoto: isUk
+        ? "Перевірити інше фото"
+        : "Check another photo",
+
+      close: isUk ? "Закрити" : "Close",
+
+      feedbackTitle: isUk
+        ? "Сайт показав правильний результат?"
+        : "Did the site return the correct result?",
+
+      feedbackText: isUk
+        ? "Це допоможе покращити точність аналізів."
+        : "This will help improve analysis accuracy.",
+
+      yesCorrect: isUk ? "Так, правильно" : "Yes, correct",
+      noMistake: isUk ? "Ні, помилка" : "No, mistake",
+
+      aiGenerated: isUk ? "Згенеровано ШІ" : "AI-generated",
+      realPhoto: isUk ? "Справжнє фото" : "Real photo",
+    };
+  }, [language]);
+
+  const resetAnalysis = () => {
+    setResult(null);
+    setPreview(null);
+    setError(null);
+    setFeedbackOpen(false);
+    setLastAnalysisId(null);
+
+    const input = document.getElementById("fileInput");
+    if (input) input.value = "";
+  };
 
   const handleFile = async (file) => {
-    setPreview(URL.createObjectURL(file));
+    if (!file) return;
+
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
     setResult(null);
     setError(null);
     setIsLoading(true);
+    setLastAnalysisId(null);
 
     try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error(t.unauthorized);
+      }
+
       const formData = new FormData();
       formData.append("image", file);
 
@@ -150,157 +183,273 @@ export default function DragDropZone({ onAnalysisSaved }) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Ошибка сервера");
+        throw new Error(data?.error || t.analysisServerError);
       }
 
       setResult(data);
 
-      const user = auth.currentUser;
-      if (user) {
-        const thumbUrl = await fileToThumbnailDataUrl(file, 30, 0.6);
-        const imageUrl = await fileToResizedDataUrl(file, 500, 0.8);
-        const probability = Number(data?.probability) || 0;
-        const label = normalizeLabel(data?.label);
+      const probability = Number(data?.probability) || 0;
+      const percent = Math.round(probability * 100);
+      const label = normalizeLabel(data?.label);
 
-        const ref = await addDoc(
-          collection(db, "users", user.uid, "analyses"),
-          {
-            thumbUrl,
-            imageUrl,
-            label,
-            percent: Math.round(probability * 100),
-            createdAt: serverTimestamp(),
-          }
-        );
+      const analysisRef = doc(collection(db, "analysis_results"));
 
-        onAnalysisSaved?.({
-          id: ref.id,
-          thumbUrl,
-          imageUrl,
+      const uploaded = await uploadImageToCloudinary(
+        file,
+        user.uid,
+        analysisRef.id
+      );
+
+      const analysisData = {
+        userId: user.uid,
+        userEmail: user.email || "",
+        imageUrl: uploaded.secureUrl,
+        thumbUrl: uploaded.secureUrl,
+        cloudinaryPublicId: uploaded.publicId,
+        cloudinaryAssetId: uploaded.assetId,
+        width: uploaded.width,
+        height: uploaded.height,
+        format: uploaded.format,
+        bytes: uploaded.bytes,
+        label,
+        percent,
+        isCorrect: null,
+        createdAt: serverTimestamp(),
+      };
+
+      await setDoc(analysisRef, analysisData);
+
+      await setDoc(
+        doc(db, "users", user.uid, "analyses", analysisRef.id),
+        analysisData
+      );
+
+      setLastAnalysisId(analysisRef.id);
+
+      if (typeof onAnalysisSaved === "function") {
+        onAnalysisSaved({
+          id: analysisRef.id,
+          imageUrl: uploaded.secureUrl,
+          thumbUrl: uploaded.secureUrl,
+          cloudinaryPublicId: uploaded.publicId,
+          cloudinaryAssetId: uploaded.assetId,
+          width: uploaded.width,
+          height: uploaded.height,
+          format: uploaded.format,
+          bytes: uploaded.bytes,
           label,
-          percent: Math.round(probability * 100),
+          percent,
+          isCorrect: null,
           createdAt: new Date().toISOString(),
         });
       }
     } catch (err) {
-      setError(err.message);
+      console.error("Ошибка в handleFile:", err);
+      setError(err?.message || t.analyzeFailed);
     } finally {
       setIsLoading(false);
+      URL.revokeObjectURL(objectUrl);
     }
   };
+
+  const saveFeedback = async (isCorrect) => {
+    const user = auth.currentUser;
+
+    try {
+      setIsSavingFeedback(true);
+
+      if (!user) {
+        throw new Error(t.unauthorized);
+      }
+
+      if (!lastAnalysisId) {
+        throw new Error(t.lastAnalysisNotFound);
+      }
+
+      await updateDoc(doc(db, "analysis_results", lastAnalysisId), {
+        isCorrect,
+      });
+
+      await updateDoc(
+        doc(db, "users", user.uid, "analyses", lastAnalysisId),
+        {
+          isCorrect,
+        }
+      );
+
+      resetAnalysis();
+    } catch (err) {
+      console.error("Ошибка сохранения feedback:", err);
+      setError(err?.message || t.feedbackSaveFailed);
+      resetAnalysis();
+    } finally {
+      setIsSavingFeedback(false);
+    }
+  };
+
+  const onDragOver = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const onDragLeave = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const onDrop = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  }, []);
+
+  const onFileInput = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+  }, []);
 
   const prob = result?.probability ?? 0;
   const isAI = result?.label === "AI-generated";
 
   return (
-    <div style={styles.wrapper}>
-      <div
-        style={{
-          ...styles.dropzone,
-          borderColor: isDragging ? "#4f8ef7" : "#555",
-          background: isDragging ? "#1a2a3a" : "#1a1a2e",
-        }}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-        onClick={() => document.getElementById("fileInput")?.click()}
-      >
-        <input
-          id="fileInput"
-          type="file"
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={onFileInput}
-        />
+    <>
+      <div style={styles.wrapper}>
+        <div
+          style={{
+            ...styles.dropzone,
+            borderColor: isDragging ? "#4f8ef7" : "#555",
+            background: isDragging ? "#1a2a3a" : "#1a1a2e",
+          }}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          onClick={() => document.getElementById("fileInput")?.click()}
+        >
+          <input
+            id="fileInput"
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={onFileInput}
+          />
 
-        {preview ? (
-          <img src={preview} alt="preview" style={styles.preview} />
-        ) : (
-          <div style={styles.placeholder}>
-            <p style={{ fontSize: 48 }}>🖼️</p>
-            <p>Перетащи фото сюда или кликни для выбора</p>
-            <p style={{ color: "#888", fontSize: 13 }}>
-              JPG, PNG, WEBP — до 10MB
-            </p>
+          {preview ? (
+            <img src={preview} alt="preview" style={styles.preview} />
+          ) : (
+            <div style={styles.placeholder}>
+              <p style={{ fontSize: 48 }}>🖼️</p>
+              <p>{t.dropText}</p>
+              <p style={{ color: "#888", fontSize: 13 }}>{t.fileTypes}</p>
+            </div>
+          )}
+        </div>
+
+        {isLoading && <div style={styles.loading}>{t.analyzing}</div>}
+
+        {error && <div style={styles.error}>❌ {error}</div>}
+
+        {result && (
+          <div style={styles.result}>
+            <div
+              style={{
+                ...styles.verdict,
+                background: isAI ? "#3a1a1a" : "#1a3a1a",
+                borderColor: isAI ? "#e74c3c" : "#2ecc71",
+              }}
+            >
+              <span style={{ fontSize: 36 }}>{isAI ? "🤖" : "📷"}</span>
+              <div>
+                <div
+                  style={{
+                    fontSize: 22,
+                    fontWeight: "bold",
+                    color: isAI ? "#e74c3c" : "#2ecc71",
+                  }}
+                >
+                  {isAI ? t.aiGenerated : t.realPhoto}
+                </div>
+                <div style={{ color: "#aaa", fontSize: 14 }}>
+                  {t.aiProbability}: {(prob * 100).toFixed(1)}%
+                </div>
+              </div>
+            </div>
+
+            <div style={styles.barWrapper}>
+              <span style={{ color: "#2ecc71" }}>{t.real}</span>
+              <div style={styles.barTrack}>
+                <div
+                  style={{
+                    ...styles.barFill,
+                    width: `${prob * 100}%`,
+                    background: isAI ? "#e74c3c" : "#2ecc71",
+                  }}
+                />
+              </div>
+              <span style={{ color: "#e74c3c" }}>{t.ai}</span>
+            </div>
+
+            <details style={styles.details}>
+              <summary style={styles.summary}>{t.metricsTitle}</summary>
+              <table style={styles.table}>
+                <tbody>
+                  {Object.entries(result.metrics || {}).map(([key, val]) => (
+                    <tr key={key}>
+                      <td style={styles.tdKey}>{key}</td>
+                      <td style={styles.tdVal}>
+                        {typeof val === "number" ? val.toFixed(4) : String(val)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+
+            <button
+              style={styles.resetBtn}
+              onClick={() => setFeedbackOpen(true)}
+            >
+              {t.checkAnotherPhoto}
+            </button>
           </div>
         )}
       </div>
 
-      {isLoading && (
-        <div style={styles.loading}>⏳ Анализируем изображение...</div>
-      )}
+      {feedbackOpen && (
+        <div style={styles.modalBackdrop} onClick={() => setFeedbackOpen(false)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <button
+              style={styles.modalClose}
+              onClick={() => setFeedbackOpen(false)}
+              aria-label={t.close}
+            >
+              ✕
+            </button>
 
-      {error && <div style={styles.error}>❌ {error}</div>}
+            <div style={styles.modalTitle}>{t.feedbackTitle}</div>
+            <div style={styles.modalText}>{t.feedbackText}</div>
 
-      {result && (
-        <div style={styles.result}>
-          <div
-            style={{
-              ...styles.verdict,
-              background: isAI ? "#3a1a1a" : "#1a3a1a",
-              borderColor: isAI ? "#e74c3c" : "#2ecc71",
-            }}
-          >
-            <span style={{ fontSize: 36 }}>{isAI ? "🤖" : "📷"}</span>
-            <div>
-              <div
-                style={{
-                  fontSize: 22,
-                  fontWeight: "bold",
-                  color: isAI ? "#e74c3c" : "#2ecc71",
-                }}
+            <div style={styles.feedbackActions}>
+              <button
+                style={{ ...styles.feedbackBtn, ...styles.feedbackYes }}
+                onClick={() => saveFeedback(true)}
+                disabled={isSavingFeedback}
               >
-                {result.label}
-              </div>
-              <div style={{ color: "#aaa", fontSize: 14 }}>
-                Вероятность AI: {(prob * 100).toFixed(1)}%
-              </div>
+                {t.yesCorrect}
+              </button>
+
+              <button
+                style={{ ...styles.feedbackBtn, ...styles.feedbackNo }}
+                onClick={() => saveFeedback(false)}
+                disabled={isSavingFeedback}
+              >
+                {t.noMistake}
+              </button>
             </div>
           </div>
-
-          <div style={styles.barWrapper}>
-            <span style={{ color: "#2ecc71" }}>Real</span>
-            <div style={styles.barTrack}>
-              <div
-                style={{
-                  ...styles.barFill,
-                  width: `${prob * 100}%`,
-                  background: isAI ? "#e74c3c" : "#2ecc71",
-                }}
-              />
-            </div>
-            <span style={{ color: "#e74c3c" }}>AI</span>
-          </div>
-
-          <details style={styles.details}>
-            <summary style={styles.summary}>Подробные метрики</summary>
-            <table style={styles.table}>
-              <tbody>
-                {Object.entries(result.metrics).map(([key, val]) => (
-                  <tr key={key}>
-                    <td style={styles.tdKey}>{key}</td>
-                    <td style={styles.tdVal}>
-                      {typeof val === "number" ? val.toFixed(4) : val}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </details>
-
-          <button
-            style={styles.resetBtn}
-            onClick={() => {
-              setResult(null);
-              setPreview(null);
-              setError(null);
-            }}
-          >
-            Проверить другое фото
-          </button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -322,95 +471,151 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    transition: "all 0.2s",
-  },
-  placeholder: {
-    color: "#888",
   },
   preview: {
     maxWidth: "100%",
-    maxHeight: 300,
-    borderRadius: 8,
+    maxHeight: 360,
+    objectFit: "contain",
+    borderRadius: 12,
+  },
+  placeholder: {
+    color: "#bbb",
   },
   loading: {
+    marginTop: 18,
     textAlign: "center",
-    padding: 16,
-    color: "#aaa",
-    fontSize: 16,
+    color: "#4f8ef7",
   },
   error: {
-    background: "#3a1a1a",
-    border: "1px solid #e74c3c",
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-    color: "#e74c3c",
+    marginTop: 18,
+    textAlign: "center",
+    color: "#ff6b6b",
   },
   result: {
-    marginTop: 20,
+    marginTop: 22,
   },
   verdict: {
     display: "flex",
     alignItems: "center",
     gap: 16,
-    padding: 20,
-    borderRadius: 12,
     border: "1px solid",
-    marginBottom: 16,
+    borderRadius: 16,
+    padding: 18,
   },
   barWrapper: {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    marginBottom: 16,
+    marginTop: 18,
   },
   barTrack: {
     flex: 1,
     height: 12,
-    background: "#333",
-    borderRadius: 6,
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.12)",
     overflow: "hidden",
   },
   barFill: {
     height: "100%",
-    borderRadius: 6,
-    transition: "width 0.5s ease",
+    borderRadius: 999,
+    transition: "width 0.25s ease",
   },
   details: {
-    background: "#111",
-    borderRadius: 8,
+    marginTop: 18,
+    background: "rgba(255,255,255,0.04)",
+    borderRadius: 14,
     padding: 12,
-    marginBottom: 12,
   },
   summary: {
     cursor: "pointer",
-    color: "#aaa",
-    fontSize: 14,
-    marginBottom: 8,
+    color: "#ddd",
   },
   table: {
     width: "100%",
+    marginTop: 12,
     borderCollapse: "collapse",
-    fontSize: 13,
   },
   tdKey: {
-    padding: "4px 8px",
-    color: "#888",
-    width: "50%",
+    padding: "8px 10px 8px 0",
+    color: "#aaa",
+    verticalAlign: "top",
   },
   tdVal: {
-    padding: "4px 8px",
+    padding: "8px 0",
     color: "#fff",
-    fontFamily: "monospace",
+    textAlign: "right",
   },
   resetBtn: {
     width: "100%",
-    padding: 12,
-    background: "#4f8ef7",
-    color: "#fff",
+    marginTop: 20,
+    padding: "14px 18px",
     border: "none",
-    borderRadius: 8,
+    borderRadius: 12,
+    background: "#5b9bff",
+    color: "#fff",
+    fontWeight: 700,
     cursor: "pointer",
-    fontSize: 15,
+  },
+  modalBackdrop: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.72)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9999,
+    padding: 20,
+  },
+  modal: {
+    width: "100%",
+    maxWidth: 420,
+    background: "#151518",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 20,
+    padding: "26px 20px 20px",
+    position: "relative",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.45)",
+  },
+  modalClose: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 34,
+    height: 34,
+    border: "none",
+    borderRadius: "50%",
+    background: "rgba(255,255,255,0.08)",
+    color: "#fff",
+    cursor: "pointer",
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 800,
+    marginBottom: 10,
+  },
+  modalText: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 14,
+    marginBottom: 18,
+    lineHeight: 1.45,
+  },
+  feedbackActions: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 12,
+  },
+  feedbackBtn: {
+    border: "none",
+    borderRadius: 12,
+    padding: "14px 12px",
+    color: "#fff",
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+  feedbackYes: {
+    background: "#1f9d55",
+  },
+  feedbackNo: {
+    background: "#c0392b",
   },
 };
