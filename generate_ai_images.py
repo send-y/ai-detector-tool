@@ -125,6 +125,17 @@ def is_sdxl(model_id: str) -> bool:
     m = model_id.lower()
     return ("xl" in m) and (not is_flux(m))
 
+def require_cuda() -> None:
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA unavailable.")
+
+
+def try_enable_xformers(pipe) -> None:
+    try:
+        pipe.enable_xformers_memory_efficient_attention()
+        print("xFormers: enabled")
+    except Exception:
+        print("xFormers: not available (this is fine).")
 
 # -------------------- Утилиты --------------------
 
@@ -146,7 +157,7 @@ def try_enable_xformers(pipe) -> None:
 # -------------------- Загрузка пайплайнов --------------------
 
 def load_pipeline_sd15(model_id: str) -> StableDiffusionPipeline:
-    print("Тип: Stable Diffusion 1.5")
+    print("Type: Stable Diffusion 1.5")
     pipe = StableDiffusionPipeline.from_pretrained(
         model_id,
         torch_dtype=torch.float16,
@@ -167,13 +178,12 @@ def load_pipeline_sd15(model_id: str) -> StableDiffusionPipeline:
     return pipe
 
 
-def load_pipeline_sdxl(model_id: str) -> StableDiffusionXLPipeline:
-    print("Тип: Stable Diffusion XL")
-    pipe = StableDiffusionXLPipeline.from_pretrained(
+def load_pipeline_flux(model_id: str) -> FluxPipeline:
+    print("Type: FLUX.1 (schnell)")
+    pipe = FluxPipeline.from_pretrained(
         model_id,
         torch_dtype=torch.float16,
         use_safetensors=True,
-        variant="fp16",
         token=os.environ.get("HF_TOKEN"),
     )
     pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config)
@@ -212,6 +222,11 @@ def load_pipeline(model_id: str):
         return load_pipeline_sdxl(model_id)
     return load_pipeline_sd15(model_id)
 
+def get_image_size(model_id: str) -> tuple[int, int]:
+    # FLUX/SDXL: 1024, SD1.5: 512
+    if is_flux(model_id) or is_sdxl(model_id):
+        return 1024, 1024
+    return 512, 512
 
 # -------------------- Параметры генерации --------------------
 
@@ -249,11 +264,13 @@ def generate(
     start_i = len(existing)
 
     if start_i >= count:
-        print(f"Уже есть {start_i} изображений — пропускаем генерацию.")
+        print(f"{start_i} images already exist — skipping generation.")
         return
 
     if start_i > 0:
-        print(f"Найдено {start_i} готовых — продолжаем с {start_i}...\n")
+        print(f"Found {start_i} already generated — continuing from {start_i}...\n")
+
+    pipe = load_pipeline(model_id)
 
     pipe = load_pipeline(model_id)
 
@@ -321,12 +338,12 @@ def generate(
                 f"[{i+1:>4}/{count}] "
                 f"seed={seed}  "
                 f"{per_img:.1f}s/img  "
-                f"осталось ~{remaining/60:.0f} мин  |  "
+                f"ETA ~{remaining/60:.0f} min  |  "
                 f"{prompt[:60]}"
             )
 
         except torch.cuda.OutOfMemoryError:
-            print(f"[{i+1:>4}/{count}] OOM — очищаем память и пропускаем")
+            print(f"[{i+1:>4}/{count}] OOM — clearing memory and skipping")
             torch.cuda.empty_cache()
             continue
         except TypeError as e:
@@ -374,7 +391,7 @@ def main() -> None:
     device_name = torch.cuda.get_device_name(0)
     vram_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
 
-    print(f"Устройство : {device_name}")
+    print(f"Device     : {device_name}")
     print(f"VRAM       : {vram_gb:.1f} GB")
     print(f"Модель     : {args.model}")
     print(f"Количество : {args.count}")

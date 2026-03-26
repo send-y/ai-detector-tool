@@ -82,12 +82,12 @@ def cohen_d(a: np.ndarray, b: np.ndarray) -> float:
 
 def print_statistics(X: np.ndarray, y: np.ndarray) -> None:
     real_X = X[y == 0]
-    ai_X   = X[y == 1]
+    ai_X = X[y == 1]
 
     print("\n" + "=" * 82)
-    print("СТАТИСТИКА ПО МЕТРИКАМ")
+    print("METRIC STATISTICS")
     print("=" * 82)
-    print(f"{'Метрика':<22} {'Real mean':>10} {'Real std':>10} {'AI mean':>10} {'AI std':>10} {'Cohen d':>9}")
+    print(f"{'Metric':<22} {'Real mean':>10} {'Real std':>10} {'AI mean':>10} {'AI std':>10} {'Cohen d':>9}")
     print("─" * 82)
 
     for i, name in enumerate(FEATURE_COLS):
@@ -142,7 +142,7 @@ def train_lr(
     w = np.zeros(d, dtype=np.float64)
     b = 0.0
 
-    # class weights (на всякий случай)
+    # Class weights (just in case)
     n0 = int((y == 0).sum())
     n1 = int((y == 1).sum())
     w0 = n / (2.0 * max(1, n0))
@@ -182,7 +182,7 @@ def evaluate(model: LRModel, X: np.ndarray, y: np.ndarray) -> dict:
     fn = int(((pred == 0) & (y == 1)).sum())
 
     prec = tp / (tp + fp + 1e-12)
-    rec  = tp / (tp + fn + 1e-12)
+    rec = tp / (tp + fn + 1e-12)
 
     return {
         "accuracy": acc,
@@ -201,7 +201,7 @@ def save_model(model: LRModel, out_path: Path) -> None:
         "w": model.w.tolist(),
         "b": float(model.b),
         "threshold": float(model.threshold),
-        # важно: чтобы scorer/server знали, как нормализовать так же
+        # Important: so the scorer/server knows how to normalize in the same way
         "z_clip": float(model.z_clip),
         "sg_floor": float(model.sg_floor),
     }
@@ -227,16 +227,16 @@ def main() -> None:
     args = ap.parse_args()
 
     csv_path = Path(args.csv)
-    print(f"Загрузка {csv_path} ...")
+    print(f"Loading {csv_path} ...")
     X, y = load_csv(csv_path)
 
     n = len(y)
     n_real = int((y == 0).sum())
     n_ai = int((y == 1).sum())
-    print(f"Загружено: {n} изображений  ({n_real} real, {n_ai} ai)")
+    print(f"Loaded: {n} images ({n_real} real, {n_ai} ai)")
 
     if n < 100:
-        raise RuntimeError("Слишком мало данных после фильтрации. Проверь CSV/колонки.")
+        raise RuntimeError("Too little data after filtering. Check the CSV/columns.")
 
     print_statistics(X, y)
 
@@ -249,7 +249,7 @@ def main() -> None:
     Xtr, ytr = X[tr], y[tr]
     Xte, yte = X[te], y[te]
 
-    print("\nОбучение Logistic Regression (numpy) с robust-normalization...")
+    print("\nTraining Logistic Regression (numpy) with robust normalization...")
     print(f"  lr={args.lr} epochs={args.epochs} l2={args.l2} sg_floor={args.sg_floor} z_clip={args.z_clip}")
 
     model = train_lr(
@@ -269,7 +269,7 @@ def main() -> None:
 
     out_path = Path(args.save)
     save_model(model, out_path)
-    print(f"\nМодель сохранена: {out_path.resolve()}")
+    print(f"\nModel saved: {out_path.resolve()}")
 
 
 if __name__ == "__main__":
