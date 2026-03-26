@@ -7,7 +7,14 @@
     const removeBtn = document.getElementById("removeBtn");
     const uploadBtn = document.getElementById("uploadBtn");
 
-    if (!dropZone || !fileInput || !preview || !placeholder || !removeBtn || !uploadBtn) {
+    if (
+      !dropZone ||
+      !fileInput ||
+      !preview ||
+      !placeholder ||
+      !removeBtn ||
+      !uploadBtn
+    ) {
       return false;
     }
 
