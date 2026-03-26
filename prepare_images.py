@@ -45,7 +45,7 @@ def prepare_one(
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Имя выходного файла
+        
         stem = in_path.stem
         ext  = ".png" if out_format == "png" else ".jpg"
         out_path = out_dir / f"{stem}{ext}"
@@ -54,14 +54,14 @@ def prepare_one(
             return True, f"skip: {out_path.name}"
 
         with Image.open(in_path) as img:
-            img = ImageOps.exif_transpose(img)  # учесть ориентацию
+            img = ImageOps.exif_transpose(img)  
             img = img.convert("RGB")
 
             if mode == "crop":
                 img = center_crop_to_square(img)
                 img = img.resize((size, size), resample=Image.Resampling.LANCZOS)
             elif mode == "fit":
-                # Вписывание в квадрат с полями (черные поля)
+                
                 img = ImageOps.contain(img, (size, size), method=Image.Resampling.LANCZOS)
                 bg  = Image.new("RGB", (size, size), (0, 0, 0))
                 x   = (size - img.size[0]) // 2
@@ -79,7 +79,7 @@ def prepare_one(
                     exif_bytes = None
 
             if out_format == "png":
-                # ВАЖНО: без optimize=True, чтобы избежать бага с _idat/fileno
+                
                 img.save(out_path, format="PNG")
             else:
                 save_kwargs = {

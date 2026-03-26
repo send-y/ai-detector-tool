@@ -1,8 +1,8 @@
 # diagnose.py
 """
-Показывает неправильно классифицированные изображения (FN/FP) и объяснение по вкладам метрик.
+Shows misclassified images (FN/FP) and an explanation based on metric contributions.
 
-Запуск:
+Usage:
   python diagnose.py --csv metrics.csv --model model.json --top 20
 """
 
@@ -116,7 +116,7 @@ def main() -> None:
     ap.add_argument("--csv", default="metrics.csv")
     ap.add_argument("--model", default="model.json")
     ap.add_argument("--top", type=int, default=20)
-    ap.add_argument("--show-contribs", action="store_true", help="Печатать top-5 вкладов для каждой ошибки")
+    ap.add_argument("--show-contribs", action="store_true", help="Print top-5 contributions for each error")
     args = ap.parse_args()
 
     model = load_model(Path(args.model))
@@ -131,12 +131,12 @@ def main() -> None:
     fn_idx = [i for i in errors if y[i] == 1 and preds[i] == 0]  # AI -> Real
     fp_idx = [i for i in errors if y[i] == 0 and preds[i] == 1]  # Real -> AI
 
-    # сортировка: самые "уверенные" ошибки
-    fn_idx.sort(key=lambda i: probs[i])            # маленькая P(AI)
-    fp_idx.sort(key=lambda i: probs[i], reverse=True)  # большая P(AI)
+    # Sort by most confident errors
+    fn_idx.sort(key=lambda i: probs[i])                # lowest P(AI)
+    fp_idx.sort(key=lambda i: probs[i], reverse=True)  # highest P(AI)
 
-    print(f"Всего строк (валидных): {len(y)}")
-    print(f"Ошибок всего         : {len(errors)}")
+    print(f"Total rows (valid)   : {len(y)}")
+    print(f"Total errors         : {len(errors)}")
     print(f"FN (AI→Real)         : {len(fn_idx)}")
     print(f"FP (Real→AI)         : {len(fp_idx)}")
     print(f"Threshold            : {thr}\n")
@@ -154,8 +154,8 @@ def main() -> None:
                     print(f"   {t['metric']:<24} contrib={t['contribution']:+.4f}  z={t['z']:+.3f}  x={t['value']:.4f}")
         print()
 
-    print_block(f"ТОП {args.top} FN: AI фото приняты за Real", fn_idx)
-    print_block(f"ТОП {args.top} FP: Real фото приняты за AI", fp_idx)
+    print_block(f"TOP {args.top} FN: AI images classified as Real", fn_idx)
+    print_block(f"TOP {args.top} FP: Real images classified as AI", fp_idx)
 
 
 if __name__ == "__main__":
