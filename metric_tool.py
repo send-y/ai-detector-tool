@@ -1,20 +1,5 @@
 # metric_tool.py
 from __future__ import annotations
-
-"""
-Strong heuristic metric set for AI-vs-Real image detection.
-
-Design goals:
-- Work on images of any resolution/aspect ratio
-- Compute content-based metrics (not relying on file extension)
-- Be robust: minimal hard deps (numpy + pillow), optional cv2/scipy
-- Standardize analysis size (default 512) to keep distributions stable
-
-Returned dataclass contains:
-- Content metrics (FEATURE_COLS) -> for ML model
-- Extra metadata fields -> useful for debugging, but not recommended for training
-"""
-
 __all__ = ["ImageMetrics", "FEATURE_COLS", "compute_metrics", "load_image_rgb"]
 
 import math
