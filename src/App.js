@@ -70,6 +70,8 @@ export default function App() {
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [language, setLanguage] = useState("en");
+	const [showSignInPassword, setShowSignInPassword] = useState(false);
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
 
   const t = {
     signIn: language === "en" ? "Sign In" : "Увійти",
@@ -319,6 +321,15 @@ const handleSignIn = async (e) => {
 
       <main className="wrap">
         <section className="hero">
+					<div className="hero-ambient" aria-hidden="true">
+  <div className="hero-ambient__aurora hero-ambient__aurora--1"></div>
+  <div className="hero-ambient__aurora hero-ambient__aurora--2"></div>
+  <div className="hero-ambient__aurora hero-ambient__aurora--3"></div>
+
+  <div className="hero-ambient__grid"></div>
+  <div className="hero-ambient__vignette"></div>
+  <div className="hero-ambient__glow"></div>
+</div>
           <header className="topbar">
             <div className="topbar__left">
               <div className="brand">
@@ -364,25 +375,51 @@ const handleSignIn = async (e) => {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div
-                    className="user-avatar"
-                    id="userAvatar"
-                    onClick={() => setDropdownOpen((prev) => !prev)}
-                  >
-                    {userName?.charAt(0)?.toUpperCase() || "U"}
-                  </div>
+  className="user-trigger"
+  onClick={() => setDropdownOpen((prev) => !prev)}
+>
+  <div className="user-avatar user-avatar--top" id="userAvatar">
+    <span className="user-avatar__glow"></span>
+    <span className="user-avatar__letter">
+      {userName?.charAt(0)?.toUpperCase() || "U"}
+    </span>
+  </div>
+
+  <div className="user-trigger__meta">
+    <div className="user-trigger__name">{userName}</div>
+    <div className="user-trigger__role">
+      {isAdmin ? "Administrator" : "Member"}
+    </div>
+  </div>
+
+  <div className={`user-trigger__chevron ${dropdownOpen ? "is-open" : ""}`}>
+    ▼
+  </div>
+</div>
 
                   <div
                     className={`user-dropdown ${dropdownOpen ? "is-open" : ""}`}
                     id="userDropdown"
                   >
                     <div className="user-card">
-                      <div className="user-card__avatar" id="userAvatarBig">
-                        {userName?.charAt(0)?.toUpperCase() || "U"}
-                      </div>
-                      <div className="user-card__name" id="userName">
-                        {userName}
-                      </div>
-                    </div>
+  <div className="user-card__avatar-wrap">
+    <div className="user-card__avatar" id="userAvatarBig">
+      <span className="user-card__avatar-glow"></span>
+      <span className="user-card__avatar-letter">
+        {userName?.charAt(0)?.toUpperCase() || "U"}
+      </span>
+    </div>
+  </div>
+
+  <div className="user-card__info">
+    <div className="user-card__name" id="userName">
+      {userName}
+    </div>
+    <div className="user-card__sub">
+      {isAdmin ? "Administrator access" : "Your LANDER profile"}
+    </div>
+  </div>
+</div>
 
                     <div className="profile-history">
                       <div className="profile-history__title">
@@ -459,26 +496,14 @@ const handleSignIn = async (e) => {
           </header>
 
           <div className="upload-wrap">
-            {isLoggedIn ? (
-              <DragDropZone
-  key={resetKey}
-  onAnalysisSaved={handleAnalysisSaved}
-  language={language}
-/>
-            ) : (
-              <div
-                className="upload-box"
-                style={{ cursor: "pointer" }}
-                onClick={() => setShowAuth(true)}
-              >
-                <div className="upload-placeholder">
-                  <div className="upload-icon">+</div>
-                  <p className="upload-title">{t.uploadDropTitle}</p>
-                  <p className="upload-sub">{t.uploadDropSub}</p>
-                </div>
-              </div>
-            )}
-          </div>
+  {isLoggedIn ? (
+    <DragDropZone
+      key={resetKey}
+      onAnalysisSaved={handleAnalysisSaved}
+      language={language}
+    />
+  ) : null}
+</div>
 
           <div className="grain" aria-hidden="true"></div>
 
@@ -554,18 +579,34 @@ const handleSignIn = async (e) => {
                     </label>
 
                     <label className="field">
-                      <span className="field__label">{t.password}</span>
-                      <div className="field__control">
-                        <input
-                          className="field__input"
-                          type="password"
-                          name="password"
-                          placeholder={t.enterPassword}
-                          autoComplete="current-password"
-                          required
-                        />
-                      </div>
-                    </label>
+  <span className="field__label">{t.password}</span>
+  <div className="field__control">
+    <input
+      className="field__input"
+      type={showSignInPassword ? "text" : "password"}
+      name="password"
+      placeholder={t.enterPassword}
+      autoComplete="current-password"
+      required
+    />
+
+    <button
+      type="button"
+      className="field__trail"
+      onClick={() => setShowSignInPassword((prev) => !prev)}
+      aria-label={showSignInPassword ? "Hide password" : "Show password"}
+    >
+      <img
+        src={
+          showSignInPassword
+            ? "/assets/eye-open.svg"
+            : "/assets/eye-closed.svg"
+        }
+        alt=""
+      />
+    </button>
+  </div>
+</label>
 
                     <button
                       className="btn btn--primary btn--full"
@@ -609,18 +650,34 @@ const handleSignIn = async (e) => {
                     </label>
 
                     <label className="field">
-                      <span className="field__label">{t.password}</span>
-                      <div className="field__control">
-                        <input
-                          className="field__input"
-                          type="password"
-                          name="password"
-                          placeholder={t.createPassword}
-                          autoComplete="new-password"
-                          required
-                        />
-                      </div>
-                    </label>
+  <span className="field__label">{t.password}</span>
+  <div className="field__control">
+    <input
+      className="field__input"
+      type={showSignUpPassword ? "text" : "password"}
+      name="password"
+      placeholder={t.createPassword}
+      autoComplete="new-password"
+      required
+    />
+
+    <button
+      type="button"
+      className="field__trail"
+      onClick={() => setShowSignUpPassword((prev) => !prev)}
+      aria-label={showSignUpPassword ? "Hide password" : "Show password"}
+    >
+      <img
+        src={
+          showSignUpPassword
+            ? "/assets/eye-open.svg"
+            : "/assets/eye-closed.svg"
+        }
+        alt=""
+      />
+    </button>
+  </div>
+</label>
 
                     <button
                       className="btn btn--primary btn--full"
@@ -636,7 +693,7 @@ const handleSignIn = async (e) => {
         </section>
       </main>
 
-      {historyModalOpen && (
+            {historyModalOpen && (
         <div
           className="analysis-modal-backdrop"
           onClick={() => setHistoryModalOpen(false)}
@@ -654,7 +711,15 @@ const handleSignIn = async (e) => {
             </button>
 
             <div className="analysis-modal__header">
-              <h3 className="analysis-modal__title">{t.historyModalTitle}</h3>
+              <div>
+                <h3 className="analysis-modal__title">{t.historyModalTitle}</h3>
+                <div className="analysis-modal__subtext">
+                  {language === "en"
+                    ? "Your recent image verification results"
+                    : "Ваші останні результати перевірки зображень"}
+                </div>
+              </div>
+
               <div className="analysis-modal__count">
                 {t.photosCount(analysisHistory.length)}
               </div>
@@ -662,27 +727,85 @@ const handleSignIn = async (e) => {
 
             <div className="analysis-history-list">
               {analysisHistory.map((item) => (
-                <div className="analysis-history-card" key={item.id}>
-                  <img
-                    src={item.imageUrl || item.thumbUrl}
-                    alt="analysis preview"
-                    className="analysis-history-card__image"
-                  />
+                <article className="analysis-history-card" key={item.id}>
+                  <div className="analysis-history-card__media">
+                    <img
+                      src={item.imageUrl || item.thumbUrl}
+                      alt="analysis preview"
+                      className="analysis-history-card__image"
+                    />
 
-                  <div className="analysis-history-card__body">
-                    <div
-                      className={`analysis-history-card__label ${
-                        item.label === "ai" ? "is-ai" : "is-real"
-                      }`}
-                    >
-                      {item.label === "ai" ? "AI" : "Real"}
-                    </div>
+                    <div className="analysis-history-card__overlay">
+                      <div
+                        className={`analysis-history-card__badge ${
+                          item.label === "ai" ? "is-ai" : "is-real"
+                        }`}
+                      >
+                        {item.label === "ai"
+                          ? language === "en"
+                            ? "AI"
+                            : "ШІ"
+                          : language === "en"
+                          ? "Real"
+                          : "Справжнє"}
+                      </div>
 
-                    <div className="analysis-history-card__percent">
-                      {item.percent}%
+                      <div className="analysis-history-card__percent">
+                        {item.percent}%
+                      </div>
                     </div>
                   </div>
-                </div>
+
+                  <div className="analysis-history-card__body">
+                    <div className="analysis-history-card__top">
+                      <div className="analysis-history-card__title">
+                        {item.label === "ai"
+                          ? language === "en"
+                            ? "AI-generated image"
+                            : "Зображення, згенероване ШІ"
+                          : language === "en"
+                          ? "Real photo"
+                          : "Справжнє фото"}
+                      </div>
+
+                      <div className="analysis-history-card__meta">
+                        {item.createdAt
+                          ? new Date(item.createdAt).toLocaleString()
+                          : "—"}
+                      </div>
+                    </div>
+
+                    <div className="analysis-history-card__stats">
+                      <div className="analysis-history-stat">
+                        <span className="analysis-history-stat__label">
+                          {language === "en" ? "Result" : "Результат"}
+                        </span>
+                        <span
+                          className={`analysis-history-stat__value ${
+                            item.label === "ai" ? "is-ai" : "is-real"
+                          }`}
+                        >
+                          {item.label === "ai"
+                            ? language === "en"
+                              ? "AI"
+                              : "ШІ"
+                            : language === "en"
+                            ? "Real"
+                            : "Справжнє"}
+                        </span>
+                      </div>
+
+                      <div className="analysis-history-stat">
+                        <span className="analysis-history-stat__label">
+                          {language === "en" ? "Probability" : "Ймовірність"}
+                        </span>
+                        <span className="analysis-history-stat__value">
+                          {item.percent}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
               ))}
             </div>
           </div>
