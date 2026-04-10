@@ -219,9 +219,6 @@ export default function AdminPanel({ onClose, language = "en" }) {
       <div style={styles.panel} onClick={(e) => e.stopPropagation()}>
         <div style={styles.panelGlowOne}></div>
         <div style={styles.panelGlowTwo}></div>
-
-
-
         <div style={styles.header}>
           <div style={styles.headerLeft}>
             <div style={styles.eyebrow}>{t.panelTitle}</div>

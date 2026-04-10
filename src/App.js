@@ -38,23 +38,51 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-function prettyAuthError(err) {
+function prettyAuthError(err, language = "en") {
   const code = err?.code || "";
-  if (code === "auth/user-not-found") return "Пользователь не найден";
-  if (code === "auth/wrong-password") return "Неверный пароль";
-  if (code === "auth/invalid-credential") return "Неверный email или пароль";
-  if (code === "auth/invalid-email") return "Неверный формат email";
-  if (code === "auth/email-already-in-use") return "Этот email уже занят";
+  const isEn = language === "en";
+
+  if (code === "auth/user-not-found") {
+    return isEn ? "User not found" : "Користувача не знайдено";
+  }
+
+  if (code === "auth/wrong-password") {
+    return isEn ? "Incorrect password" : "Неправильно вказаний пароль";
+  }
+
+  if (code === "auth/invalid-credential") {
+    return isEn
+      ? "Incorrect email or password"
+      : "Неправильно вказано email або пароль";
+  }
+
+  if (code === "auth/invalid-email") {
+    return isEn ? "Invalid email format" : "Неправильний формат email";
+  }
+
+  if (code === "auth/email-already-in-use") {
+    return isEn ? "This email is already in use" : "Цей email вже використовується";
+  }
+
   if (code === "auth/weak-password") {
-    return "Пароль должен быть минимум 6 символов";
+    return isEn
+      ? "Password must be at least 6 characters"
+      : "Пароль має містити щонайменше 6 символів";
   }
+
   if (code === "auth/too-many-requests") {
-    return "Слишком много попыток. Попробуй позже";
+    return isEn
+      ? "Too many attempts. Try again later"
+      : "Занадто багато спроб. Спробуйте пізніше";
   }
+
   if (code === "auth/operation-not-allowed") {
-    return "Email/Password не включен в Firebase";
+    return isEn
+      ? "Email/Password sign-in is not enabled in Firebase"
+      : "У Firebase не увімкнено вхід через Email/Password";
   }
-  return err?.message || "Ошибка авторизации";
+
+  return isEn ? "Authorization error" : "Помилка авторизації";
 }
 
 export default function App() {
@@ -72,6 +100,7 @@ export default function App() {
   const [language, setLanguage] = useState("en");
 	const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [showSignUpPassword, setShowSignUpPassword] = useState(false);
+	const [authError, setAuthError] = useState("");
 
   const t = {
     signIn: language === "en" ? "Sign In" : "Увійти",
@@ -241,20 +270,29 @@ const handleSignIn = async (e) => {
   const email = String(formData.get("email") || "").trim();
   const password = String(formData.get("password") || "");
 
+  setAuthError("");
+
   if (!email || !password) {
+    setAuthError(
+      language === "en"
+        ? "Please enter email and password"
+        : "Будь ласка, введіть email і пароль"
+    );
     return;
   }
 
   try {
     await signInWithEmailAndPassword(auth, email, password);
     form.reset();
+    setAuthError("");
     setShowAuth(false);
   } catch (err) {
     console.error(err);
+    setAuthError(prettyAuthError(err, language));
   }
 };
 
-  const handleSignUp = async (e) => {
+const handleSignUp = async (e) => {
   e.preventDefault();
 
   const form = e.currentTarget;
@@ -263,7 +301,14 @@ const handleSignIn = async (e) => {
   const email = String(formData.get("email") || "").trim();
   const password = String(formData.get("password") || "");
 
+  setAuthError("");
+
   if (!nickname || !email || !password) {
+    setAuthError(
+      language === "en"
+        ? "Please fill in all fields"
+        : "Будь ласка, заповніть усі поля"
+    );
     return;
   }
 
@@ -278,9 +323,11 @@ const handleSignIn = async (e) => {
     });
 
     form.reset();
+    setAuthError("");
     setShowAuth(false);
   } catch (err) {
     console.error(err);
+setAuthError(prettyAuthError(err, language));
   }
 };
 
@@ -541,26 +588,30 @@ const handleSignIn = async (e) => {
                   role="tablist"
                   aria-label={t.authMode}
                 >
+									
                   <button
-                    className={`segmented__btn ${
-                      authMode === "signin" ? "is-active" : ""
-                    }`}
-                    type="button"
-                    onClick={() => setAuthMode("signin")}
-                  >
-                    {t.signIn}
-                  </button>
+  className={`segmented__btn ${authMode === "signin" ? "is-active" : ""}`}
+  type="button"
+  onClick={() => {
+    setAuthMode("signin");
+    setAuthError("");
+  }}
+>
+  {t.signIn}
+</button>
 
-                  <button
-                    className={`segmented__btn ${
-                      authMode === "signup" ? "is-active" : ""
-                    }`}
-                    type="button"
-                    onClick={() => setAuthMode("signup")}
-                  >
-                    {t.signUp}
-                  </button>
+<button
+  className={`segmented__btn ${authMode === "signup" ? "is-active" : ""}`}
+  type="button"
+  onClick={() => {
+    setAuthMode("signup");
+    setAuthError("");
+  }}
+>
+  {t.signUp}
+</button>
                 </div>
+								{authError && <div className="auth-error">{authError}</div>}
 
                 {authMode === "signin" && (
                   <form className="auth-form" onSubmit={handleSignIn}>

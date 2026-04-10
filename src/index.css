@@ -907,8 +907,6 @@ body.locked .lock-overlay {
   display: flex;
 }
 
-
-
 [hidden] {
   display: none !important;
 }
@@ -2264,4 +2262,17 @@ body.locked .lock-overlay {
     max-width: none;
     font-size: 13px;
   }
+}
+
+.auth-error {
+  margin-top: 12px;
+  margin-bottom: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 77, 77, 0.12);
+  border: 1px solid rgba(255, 77, 77, 0.28);
+  color: #ff8e8e;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: left;
 }
