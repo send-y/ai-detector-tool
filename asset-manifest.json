@@ -1,0 +1,14 @@
+{
+  "files": {
+    "main.css": "/ai-detector-tool/static/css/main.08e3d06c.css",
+    "main.js": "/ai-detector-tool/static/js/main.f648b2ee.js",
+    "static/media/bg.webp": "/ai-detector-tool/static/media/bg.77bea46d13bce595f3c4.webp",
+    "index.html": "/ai-detector-tool/index.html",
+    "main.08e3d06c.css.map": "/ai-detector-tool/static/css/main.08e3d06c.css.map",
+    "main.f648b2ee.js.map": "/ai-detector-tool/static/js/main.f648b2ee.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.08e3d06c.css",
+    "static/js/main.f648b2ee.js"
+  ]
+}
