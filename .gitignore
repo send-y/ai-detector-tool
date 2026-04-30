@@ -1,33 +1,26 @@
-# dependencies
 node_modules/
 
-# production
 build/
 dist/
 
-# env
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-# logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# caches
 .cache/
 coverage/
 
-# local / temporary
 .DS_Store
 structure.txt
 *.bat
 *.tmp
 *.log
 
-# large generated datasets / metrics should be stored outside frontend repo
 out/
 *.csv
