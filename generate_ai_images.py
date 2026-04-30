@@ -17,7 +17,6 @@
 
 from __future__ import annotations
 
-# ✅ Шаг 1: настройка окружения ДО импортов HuggingFace/diffusers
 import os
 from pathlib import Path
 
@@ -34,7 +33,6 @@ os.environ["TRANSFORMERS_CACHE"] = str(_CACHE / "transformers")
 os.environ["DIFFUSERS_CACHE"] = str(_CACHE / "diffusers")
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-# ✅ Шаг 2: импорты
 import argparse
 import random
 import time
@@ -49,7 +47,6 @@ from diffusers import (
     EulerDiscreteScheduler,
 )
 
-# -------------------- Промпты --------------------
 
 SUBJECTS = [
     "a middle-aged man", "an elderly woman", "a teenage girl",
@@ -115,7 +112,6 @@ def random_prompt() -> tuple[str, str]:
     return prompt, NEGATIVE
 
 
-# -------------------- Определение типа модели --------------------
 
 def is_flux(model_id: str) -> bool:
     return "flux" in model_id.lower()
@@ -126,7 +122,6 @@ def is_sdxl(model_id: str) -> bool:
     return ("xl" in m) and (not is_flux(m))
 
 
-# -------------------- Утилиты --------------------
 
 def require_cuda() -> None:
     if not torch.cuda.is_available():
@@ -143,7 +138,6 @@ def try_enable_xformers(pipe) -> None:
         print("xFormers: не доступен (это нормально).")
 
 
-# -------------------- Загрузка пайплайнов --------------------
 
 def load_pipeline_sd15(model_id: str) -> StableDiffusionPipeline:
     print("Тип: Stable Diffusion 1.5")
@@ -178,7 +172,6 @@ def load_pipeline_sdxl(model_id: str) -> StableDiffusionXLPipeline:
     )
     pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config)
 
-    # Для 12GB комфортнее offload (медленнее, но меньше OOM)
     pipe.enable_model_cpu_offload()
     pipe.enable_attention_slicing()
     try_enable_xformers(pipe)
@@ -213,7 +206,6 @@ def load_pipeline(model_id: str):
     return load_pipeline_sd15(model_id)
 
 
-# -------------------- Параметры генерации --------------------
 
 def get_image_size(model_id: str) -> tuple[int, int]:
     # FLUX/SDXL: 1024, SD1.5: 512
@@ -230,7 +222,6 @@ def get_defaults(model_id: str) -> tuple[int, float]:
     return 25, 7.0
 
 
-# -------------------- Генерация --------------------
 
 def generate(
     out_dir: Path,
@@ -268,7 +259,6 @@ def generate(
     use_flux = is_flux(model_id)
     use_sdxl = is_sdxl(model_id)
 
-    # Для моделей с CPU offload (SDXL/FLUX) безопаснее генератор на CPU
     gen_device = "cpu" if (use_flux or use_sdxl) else "cuda"
 
     print(f"Размер изображений : {w}×{h}")
@@ -286,7 +276,6 @@ def generate(
 
         try:
             if use_flux:
-                # negative_prompt может не поддерживаться в FLUX в твоей версии diffusers
                 result = pipe(
                     prompt=prompt,
                     width=w,
@@ -341,7 +330,6 @@ def generate(
     print(f"Папка: {out_dir.resolve()}")
 
 
-# -------------------- CLI --------------------
 
 def main() -> None:
     warnings.filterwarnings("ignore", category=UserWarning)
