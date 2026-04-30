@@ -1,10 +1,26 @@
 import { useState } from "react";
 
-export default function LoginForm({ onSubmit, t }) {
+export default function RegisterForm({ onSubmit, t }) {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
     <form className="auth-form" onSubmit={onSubmit}>
+      <label className="field">
+        <span className="field__label">{t.nickname}</span>
+        <div className="field__control">
+          <input
+            className="field__input"
+            type="text"
+            name="nickname"
+            placeholder={t.enterNickname}
+            autoComplete="username"
+            required
+            minLength={3}
+            maxLength={20}
+          />
+        </div>
+      </label>
+
       <label className="field">
         <span className="field__label">{t.email}</span>
         <div className="field__control">
@@ -26,8 +42,8 @@ export default function LoginForm({ onSubmit, t }) {
             className="field__input"
             type={showPassword ? "text" : "password"}
             name="password"
-            placeholder={t.enterPassword}
-            autoComplete="current-password"
+            placeholder={t.createPassword}
+            autoComplete="new-password"
             required
           />
 
@@ -46,7 +62,7 @@ export default function LoginForm({ onSubmit, t }) {
       </label>
 
       <button className="btn btn--primary btn--full" type="submit">
-        {t.signIn}
+        {t.signUp}
       </button>
     </form>
   );
