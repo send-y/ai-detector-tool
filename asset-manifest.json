@@ -1,13 +1,13 @@
 {
   "files": {
     "main.css": "/ai-detector-tool/static/css/main.e4b05473.css",
-    "main.js": "/ai-detector-tool/static/js/main.bf77431f.js",
+    "main.js": "/ai-detector-tool/static/js/main.ed31ac07.js",
     "index.html": "/ai-detector-tool/index.html",
     "main.e4b05473.css.map": "/ai-detector-tool/static/css/main.e4b05473.css.map",
-    "main.bf77431f.js.map": "/ai-detector-tool/static/js/main.bf77431f.js.map"
+    "main.ed31ac07.js.map": "/ai-detector-tool/static/js/main.ed31ac07.js.map"
   },
   "entrypoints": [
     "static/css/main.e4b05473.css",
-    "static/js/main.bf77431f.js"
+    "static/js/main.ed31ac07.js"
   ]
 }
