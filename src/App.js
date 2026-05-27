@@ -11,6 +11,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useUserAnalyses } from "./hooks/useUserAnalyses";
 import { getAppTranslations } from "./i18n/translations";
 import { prettyAuthError } from "./utils/authErrors";
+import { publicAsset } from "./utils/publicAsset";
 
 export default function App() {
   const [showAuth, setShowAuth] = useState(false);
@@ -37,6 +38,9 @@ export default function App() {
 
   const t = getAppTranslations(language);
   const isAdmin = String(userRole).trim().toLowerCase() === "admin";
+  const pageBgStyle = {
+    "--page-bg-image": `url("${publicAsset("assets/bg.webp")}")`,
+  };
 
   const handleBrandClick = () => {
     setShowAuth(false);
@@ -75,7 +79,7 @@ export default function App() {
 
   return (
     <div onClick={() => setDropdownOpen(false)}>
-      <div className="page-bg"></div>
+      <div className="page-bg" style={pageBgStyle}></div>
 
       <main className="wrap">
         <section className="hero">

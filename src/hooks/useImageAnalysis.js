@@ -1,10 +1,35 @@
 import { useCallback, useState } from "react";
+import {
+  ALLOWED_IMAGE_EXTENSIONS,
+  ALLOWED_IMAGE_TYPES,
+  MAX_UPLOAD_BYTES,
+  MAX_UPLOAD_MB,
+} from "../config/api";
 import { auth } from "../config/firebase";
 import {
   analyzeImage,
   saveAnalysisFeedback,
   saveAnalysisResult,
 } from "../services/analysisService";
+
+function hasAllowedExtension(file) {
+  const name = String(file?.name || "").toLowerCase();
+  return ALLOWED_IMAGE_EXTENSIONS.some((ext) => name.endsWith(ext));
+}
+
+function validateImageFile(file, t) {
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error(t.fileTooLarge(MAX_UPLOAD_MB));
+  }
+
+  if (file.type && !ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    throw new Error(t.unsupportedFileType);
+  }
+
+  if (!file.type && !hasAllowedExtension(file)) {
+    throw new Error(t.unsupportedFileType);
+  }
+}
 
 export function useImageAnalysis({ onAnalysisSaved, t }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -31,20 +56,25 @@ export function useImageAnalysis({ onAnalysisSaved, t }) {
     async (file) => {
       if (!file) return;
 
-      const objectUrl = URL.createObjectURL(file);
-      setPreview(objectUrl);
+      let objectUrl = null;
       setResult(null);
-      setError(null);
-      setIsLoading(true);
       setLastAnalysisId(null);
+      setError(null);
 
       try {
+        validateImageFile(file, t);
+
         const user = auth.currentUser;
         if (!user) {
           throw new Error(t.unauthorized);
         }
 
-        const data = await analyzeImage(file, t.analysisServerError);
+        objectUrl = URL.createObjectURL(file);
+        setPreview(objectUrl);
+        setIsLoading(true);
+
+        const authToken = await user.getIdToken();
+        const data = await analyzeImage(file, authToken, t.analysisServerError);
         setResult(data);
 
         const savedAnalysis = await saveAnalysisResult({
@@ -60,7 +90,7 @@ export function useImageAnalysis({ onAnalysisSaved, t }) {
         setError(err?.message || t.analyzeFailed);
       } finally {
         setIsLoading(false);
-        URL.revokeObjectURL(objectUrl);
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
       }
     },
     [onAnalysisSaved, t]

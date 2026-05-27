@@ -58,6 +58,11 @@ export function getDragDropTranslations(language = "en") {
     unauthorized: isUk ? "Користувач не авторизований" : "User is not authorized",
     analysisServerError: isUk ? "Помилка сервера аналізу" : "Analysis server error",
     analyzeFailed: isUk ? "Не вдалося виконати аналіз" : "Failed to analyze image",
+    unsupportedFileType: isUk ? "Непідтримуваний формат зображення" : "Unsupported image format",
+    fileTooLarge: (maxMb) =>
+      isUk
+        ? `Файл завеликий. Максимум ${maxMb}MB`
+        : `File is too large. Maximum ${maxMb}MB`,
     feedbackSaveFailed: isUk ? "Не вдалося зберегти відповідь" : "Failed to save response",
     lastAnalysisNotFound: isUk ? "Не знайдено ID останнього аналізу" : "Latest analysis ID not found",
     dropText: isUk

@@ -2,6 +2,10 @@ node_modules/
 
 build/
 dist/
+venv/
+v1_backup/
+__pycache__/
+*.py[cod]
 
 .env
 .env.local
@@ -24,3 +28,5 @@ structure.txt
 
 out/
 *.csv
+model.json
+result.json

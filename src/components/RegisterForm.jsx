@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { publicAsset } from "../utils/publicAsset";
 
 export default function RegisterForm({ onSubmit, t }) {
   const [showPassword, setShowPassword] = useState(false);
@@ -54,7 +55,9 @@ export default function RegisterForm({ onSubmit, t }) {
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
             <img
-              src={showPassword ? "/assets/eye-open.svg" : "/assets/eye-closed.svg"}
+              src={publicAsset(
+                showPassword ? "assets/eye-open.svg" : "assets/eye-closed.svg"
+              )}
               alt=""
             />
           </button>

@@ -35,7 +35,7 @@ export default function UploadDropArea({
         <input
           id="fileInput"
           type="file"
-          accept="image/*"
+          accept=".jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff,image/jpeg,image/png,image/webp,image/bmp,image/tiff"
           style={{ display: "none" }}
           onChange={onFileInput}
         />

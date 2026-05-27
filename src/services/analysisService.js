@@ -34,12 +34,17 @@ export async function fetchUserAnalyses(uid) {
   });
 }
 
-export async function analyzeImage(file, errorMessage) {
+export async function analyzeImage(file, authToken, errorMessage) {
   const formData = new FormData();
   formData.append("image", file);
 
+  const headers = authToken
+    ? { Authorization: `Bearer ${authToken}` }
+    : undefined;
+
   const response = await fetch(API_URL, {
     method: "POST",
+    headers,
     body: formData,
   });
 
@@ -72,7 +77,9 @@ export async function saveAnalysisResult({ file, user, modelResult }) {
     format: uploaded.format,
     bytes: uploaded.bytes,
     label,
+    probability,
     percent,
+    modelVersion: modelResult?.modelVersion || "",
     isCorrect: null,
     createdAt: serverTimestamp(),
   };
@@ -91,7 +98,9 @@ export async function saveAnalysisResult({ file, user, modelResult }) {
     format: uploaded.format,
     bytes: uploaded.bytes,
     label,
+    probability,
     percent,
+    modelVersion: modelResult?.modelVersion || "",
     isCorrect: null,
     createdAt: new Date().toISOString(),
   };
