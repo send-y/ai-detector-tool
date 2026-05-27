@@ -1,5 +1,8 @@
+const apiBaseUrl = (process.env.REACT_APP_API_BASE_URL || "").replace(/\/$/, "");
+
 export const API_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api/analyze";
+  process.env.REACT_APP_API_URL ||
+  (apiBaseUrl ? `${apiBaseUrl}/api/analyze` : "http://localhost:5000/api/analyze");
 
 const maxUploadMb = Number(process.env.REACT_APP_MAX_UPLOAD_MB || 10);
 
