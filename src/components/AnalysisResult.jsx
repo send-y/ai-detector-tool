@@ -147,9 +147,12 @@ function downloadReport(result, percent, statusLabel) {
 export default function AnalysisResult({
   result,
   preview,
+  feedbackStatus,
+  isSavingFeedback,
   styles,
   t,
-  onFeedbackRequest,
+  onFeedbackSave,
+  onReset,
 }) {
   if (!result) return null;
 
@@ -333,6 +336,44 @@ export default function AnalysisResult({
         </div>
       </div>
 
+      <div style={styles.inlineFeedback}>
+        <div style={styles.inlineFeedbackText}>
+          <div style={styles.inlineFeedbackTitle}>
+            {feedbackStatus ? t.feedbackSavedTitle : t.feedbackTitle}
+          </div>
+          <div style={styles.inlineFeedbackSub}>
+            {feedbackStatus ? t.feedbackSavedText : t.feedbackText}
+          </div>
+        </div>
+
+        <div style={styles.inlineFeedbackActions}>
+          <button
+            style={{
+              ...styles.inlineFeedbackBtn,
+              ...styles.inlineFeedbackYes,
+              ...(feedbackStatus === "correct" ? styles.inlineFeedbackBtnActive : {}),
+            }}
+            type="button"
+            onClick={() => onFeedbackSave(true)}
+            disabled={isSavingFeedback || Boolean(feedbackStatus)}
+          >
+            {isSavingFeedback && !feedbackStatus ? t.savingFeedback : t.yesCorrect}
+          </button>
+          <button
+            style={{
+              ...styles.inlineFeedbackBtn,
+              ...styles.inlineFeedbackNo,
+              ...(feedbackStatus === "mistake" ? styles.inlineFeedbackBtnActive : {}),
+            }}
+            type="button"
+            onClick={() => onFeedbackSave(false)}
+            disabled={isSavingFeedback || Boolean(feedbackStatus)}
+          >
+            {isSavingFeedback && !feedbackStatus ? t.savingFeedback : t.noMistake}
+          </button>
+        </div>
+      </div>
+
       <div style={styles.resultActions}>
         <button
           style={styles.downloadBtn}
@@ -341,7 +382,7 @@ export default function AnalysisResult({
         >
           {t.downloadAnalysis}
         </button>
-        <button style={styles.secondaryBtn} type="button" onClick={onFeedbackRequest}>
+        <button style={styles.secondaryBtn} type="button" onClick={onReset}>
           {t.checkAnotherPhoto}
         </button>
       </div>

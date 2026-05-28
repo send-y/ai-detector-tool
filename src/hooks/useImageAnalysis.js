@@ -38,9 +38,9 @@ export function useImageAnalysis({ onAnalysisSaved, t }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [lastAnalysisId, setLastAnalysisId] = useState(null);
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
+  const [feedbackStatus, setFeedbackStatus] = useState(null);
 
   const clearPreviewUrl = useCallback(() => {
     if (previewUrlRef.current) {
@@ -54,7 +54,7 @@ export function useImageAnalysis({ onAnalysisSaved, t }) {
     setResult(null);
     setPreview(null);
     setError(null);
-    setFeedbackOpen(false);
+    setFeedbackStatus(null);
     setLastAnalysisId(null);
 
     const input = document.getElementById("fileInput");
@@ -70,6 +70,7 @@ export function useImageAnalysis({ onAnalysisSaved, t }) {
       setResult(null);
       setLastAnalysisId(null);
       setError(null);
+      setFeedbackStatus(null);
 
       try {
         validateImageFile(file, t);
@@ -123,16 +124,15 @@ export function useImageAnalysis({ onAnalysisSaved, t }) {
         }
 
         await saveAnalysisFeedback(user.uid, lastAnalysisId, isCorrect);
-        resetAnalysis();
+        setFeedbackStatus(isCorrect ? "correct" : "mistake");
       } catch (err) {
         console.error("Ошибка сохранения feedback:", err);
         setError(err?.message || t.feedbackSaveFailed);
-        resetAnalysis();
       } finally {
         setIsSavingFeedback(false);
       }
     },
-    [lastAnalysisId, resetAnalysis, t]
+    [lastAnalysisId, t]
   );
 
   const onDragOver = useCallback((e) => {
@@ -169,9 +169,8 @@ export function useImageAnalysis({ onAnalysisSaved, t }) {
     result,
     error,
     preview,
-    feedbackOpen,
     isSavingFeedback,
-    setFeedbackOpen,
+    feedbackStatus,
     resetAnalysis,
     saveFeedback,
     onDragOver,

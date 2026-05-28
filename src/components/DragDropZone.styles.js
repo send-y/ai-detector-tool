@@ -964,6 +964,73 @@ export const dragDropStyles = {
     fontWeight: 700,
   },
 
+  inlineFeedback: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 12,
+    padding: 14,
+    borderRadius: 18,
+    background:
+      "linear-gradient(180deg, rgba(18, 21, 30, 0.84), rgba(9, 11, 16, 0.9))",
+    border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow: "0 14px 32px rgba(0,0,0,0.22)",
+  },
+
+  inlineFeedbackText: {
+    minWidth: 210,
+    flex: "1 1 230px",
+  },
+
+  inlineFeedbackTitle: {
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 14,
+    lineHeight: 1.2,
+    fontWeight: 950,
+  },
+
+  inlineFeedbackSub: {
+    marginTop: 4,
+    color: "rgba(255,255,255,0.52)",
+    fontSize: 11,
+    lineHeight: 1.4,
+    fontWeight: 700,
+  },
+
+  inlineFeedbackActions: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 8,
+    flex: "1 1 230px",
+  },
+
+  inlineFeedbackBtn: {
+    minHeight: 42,
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 14,
+    padding: "11px 12px",
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: 950,
+    cursor: "pointer",
+    boxShadow: "0 12px 24px rgba(0,0,0,0.18)",
+  },
+
+  inlineFeedbackYes: {
+    background: "linear-gradient(135deg, rgba(38, 184, 108, 0.92), rgba(24, 145, 79, 0.92))",
+  },
+
+  inlineFeedbackNo: {
+    background: "linear-gradient(135deg, rgba(207, 71, 83, 0.94), rgba(157, 48, 61, 0.94))",
+  },
+
+  inlineFeedbackBtnActive: {
+    outline: "2px solid rgba(255,255,255,0.46)",
+    outlineOffset: 2,
+    filter: "saturate(1.12)",
+  },
+
   resultActions: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",

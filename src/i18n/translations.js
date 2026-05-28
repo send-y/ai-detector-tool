@@ -120,6 +120,11 @@ export function getDragDropTranslations(language = "en") {
     feedbackText: isUk
       ? "Це допоможе покращити точність аналізів."
       : "This will help improve analysis accuracy.",
+    feedbackSavedTitle: isUk ? "Дякуємо за відповідь" : "Thanks for the feedback",
+    feedbackSavedText: isUk
+      ? "Оцінку збережено. Вона допоможе точніше налаштовувати перевірку."
+      : "Your response was saved and will help tune future checks.",
+    savingFeedback: isUk ? "Збереження..." : "Saving...",
     yesCorrect: isUk ? "Так, правильно" : "Yes, correct",
     noMistake: isUk ? "Ні, помилка" : "No, mistake",
     aiGenerated: isUk ? "Згенеровано ШІ" : "AI-generated",

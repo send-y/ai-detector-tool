@@ -1,7 +1,6 @@
 import { getDragDropTranslations } from "../i18n/translations";
 import { useImageAnalysis } from "../hooks/useImageAnalysis";
 import AnalysisResult from "./AnalysisResult";
-import FeedbackModal from "./FeedbackModal";
 import UploadDropArea from "./UploadDropArea";
 import { dragDropStyles as styles } from "./DragDropZone.styles";
 
@@ -14,9 +13,9 @@ export default function DragDropZone({ onAnalysisSaved, language = "en" }) {
     result,
     error,
     preview,
-    feedbackOpen,
     isSavingFeedback,
-    setFeedbackOpen,
+    feedbackStatus,
+    resetAnalysis,
     saveFeedback,
     onDragOver,
     onDragLeave,
@@ -50,20 +49,14 @@ export default function DragDropZone({ onAnalysisSaved, language = "en" }) {
         <AnalysisResult
           result={result}
           preview={preview}
+          feedbackStatus={feedbackStatus}
+          isSavingFeedback={isSavingFeedback}
           styles={styles}
           t={t}
-          onFeedbackRequest={() => setFeedbackOpen(true)}
+          onFeedbackSave={saveFeedback}
+          onReset={resetAnalysis}
         />
       </div>
-
-      <FeedbackModal
-        isOpen={feedbackOpen}
-        isSavingFeedback={isSavingFeedback}
-        onClose={() => setFeedbackOpen(false)}
-        onSave={saveFeedback}
-        styles={styles}
-        t={t}
-      />
     </>
   );
 }
