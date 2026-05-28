@@ -25,52 +25,9 @@ function metricStrength(item, fallbackIndex) {
     ? zScore / 5
     : Number.isFinite(contribution)
       ? contribution / 2.5
-      : 0.7 - fallbackIndex * 0.1;
+      : 0.74 - fallbackIndex * 0.1;
 
-  return Math.round(clamp(rawStrength * 100, 8, 99));
-}
-
-function buildSignals(result, percent, realPercent, t) {
-  const baseSignals = [
-    {
-      label: t.aiConfidence,
-      value: percent,
-      tone: "ai",
-    },
-    {
-      label: t.realPhotoScore,
-      value: realPercent,
-      tone: "real",
-    },
-  ];
-
-  const topSignals = Array.isArray(result?.top_contributions)
-    ? result.top_contributions.slice(0, 3).map((item, index) => ({
-        label: humanizeMetric(item.metric, t),
-        value: metricStrength(item, index),
-        tone: Number(item.contribution) >= 0 ? "ai" : "real",
-        hint: Number(item.contribution) >= 0 ? t.pushesAI : t.pushesReal,
-      }))
-    : [];
-
-  if (topSignals.length > 0) {
-    return [...baseSignals, ...topSignals].slice(0, 5);
-  }
-
-  const metrics = result?.metrics || {};
-  const fallbackMetrics = [
-    [t.artifactSignal, metrics.jpeg_artifact_score],
-    [t.textureNoise, metrics.noise_naturalness ?? metrics.noise_entropy],
-    [t.frequencyPattern, metrics.hf_energy_ratio ?? metrics.spectral_flatness],
-  ]
-    .filter(([, value]) => Number.isFinite(Number(value)))
-    .map(([label, value]) => ({
-      label,
-      value: Math.round(clamp(Number(value) * 100, 8, 99)),
-      tone: "neutral",
-    }));
-
-  return [...baseSignals, ...fallbackMetrics].slice(0, 5);
+  return Math.round(clamp(rawStrength * 100, 9, 99));
 }
 
 function formatMetricValue(value) {
@@ -79,6 +36,85 @@ function formatMetricValue(value) {
   }
 
   return String(value);
+}
+
+function buildFingerprints(result, t) {
+  const top = Array.isArray(result?.top_contributions)
+    ? result.top_contributions.slice(0, 4).map((item, index) => ({
+        label: humanizeMetric(item.metric, t),
+        value: metricStrength(item, index),
+        tone: Number(item.contribution) >= 0 ? "ai" : "real",
+        hint: Number(item.contribution) >= 0 ? t.pushesAI : t.pushesReal,
+        metricValue: item.value,
+      }))
+    : [];
+
+  if (top.length > 0) {
+    return top;
+  }
+
+  const metrics = result?.metrics || {};
+  return [
+    {
+      label: t.artifactSignal,
+      value: Math.round(clamp(Number(metrics.jpeg_artifact_score) * 100, 12, 91)),
+      tone: "ai",
+      hint: t.visualEvidence,
+      metricValue: metrics.jpeg_artifact_score,
+    },
+    {
+      label: t.textureNoise,
+      value: Math.round(
+        clamp(Number(metrics.noise_naturalness ?? metrics.noise_entropy) * 100, 12, 91)
+      ),
+      tone: "real",
+      hint: t.visualEvidence,
+      metricValue: metrics.noise_naturalness ?? metrics.noise_entropy,
+    },
+    {
+      label: t.frequencyPattern,
+      value: Math.round(
+        clamp(Number(metrics.hf_energy_ratio ?? metrics.spectral_flatness) * 100, 12, 91)
+      ),
+      tone: "neutral",
+      hint: t.modelSignal,
+      metricValue: metrics.hf_energy_ratio ?? metrics.spectral_flatness,
+    },
+  ].filter((item) => Number.isFinite(item.value));
+}
+
+function buildSummaryStats(percent, realPercent, result, t) {
+  const threshold = Number(result?.threshold);
+  const stats = [
+    {
+      label: t.aiProbability,
+      value: `${percent.toFixed(1)}%`,
+      tone: "ai",
+    },
+    {
+      label: t.realPhotoScore,
+      value: `${realPercent.toFixed(1)}%`,
+      tone: "real",
+    },
+  ];
+
+  if (Number.isFinite(threshold)) {
+    stats.push({
+      label: t.threshold,
+      value: `${toPercent(threshold).toFixed(1)}%`,
+      tone: "neutral",
+    });
+  }
+
+  if (result?.modelVersion) {
+    stats.push({
+      label: t.modelVersion,
+      value: String(result.modelVersion),
+      tone: "neutral",
+    });
+  }
+
+  return stats.slice(0, 4);
 }
 
 function downloadReport(result, percent, statusLabel) {
@@ -108,7 +144,13 @@ function downloadReport(result, percent, statusLabel) {
   URL.revokeObjectURL(url);
 }
 
-export default function AnalysisResult({ result, styles, t, onFeedbackRequest }) {
+export default function AnalysisResult({
+  result,
+  preview,
+  styles,
+  t,
+  onFeedbackRequest,
+}) {
   if (!result) return null;
 
   const percent = toPercent(result?.probability ?? 0);
@@ -121,51 +163,87 @@ export default function AnalysisResult({ result, styles, t, onFeedbackRequest })
     : percent <= 35
       ? t.statusLikelyReal
       : t.statusNeedsReview;
-  const confidenceCopy = isAI
-    ? t.aiSignalDetected
-    : t.realSignalDetected;
-  const signals = buildSignals(result, percent, realPercent, t);
+  const confidenceCopy = isAI ? t.aiSignalDetected : t.realSignalDetected;
+  const fingerprints = buildFingerprints(result, t);
+  const stats = buildSummaryStats(percent, realPercent, result, t);
   const metricEntries = Object.entries(result.metrics || {}).slice(0, 8);
+  const ringColor = isAI ? "#ff6d83" : "#62e69a";
 
   return (
     <section style={styles.resultPanel} aria-label={t.analysisResultLabel}>
-      <div style={styles.resultHeader}>
-        <div style={styles.resultIdentity}>
-          <div
-            style={{
-              ...styles.resultIcon,
-              ...(isAI ? styles.resultIconAI : styles.resultIconReal),
-            }}
-          >
-            {isAI ? "AI" : "OK"}
+      <div style={styles.reportHero}>
+        <div style={styles.reportMedia}>
+          <div style={styles.reportMediaFrame}>
+            {preview ? (
+              <img src={preview} alt={t.uploadedImage} style={styles.reportImage} />
+            ) : (
+              <div style={styles.reportImageFallback}>LANDER</div>
+            )}
+            <div style={styles.reportScanLine}></div>
           </div>
-          <div>
-            <div
+          <div style={styles.reportMediaCaption}>{t.aiFingerprint}</div>
+        </div>
+
+        <div style={styles.reportContent}>
+          <div style={styles.reportTopline}>
+            <span
               style={{
-                ...styles.resultStatus,
-                color: isAI ? "#ff9a68" : "#75f0ad",
+                ...styles.reportPill,
+                ...(isAI ? styles.reportPillAI : styles.reportPillReal),
               }}
             >
               {statusLabel}
-            </div>
-            <div style={styles.resultDescription}>{confidenceCopy}</div>
+            </span>
+            <span style={styles.reportReady}>{t.reportReady}</span>
           </div>
-        </div>
 
-        <div
-          style={{
-            ...styles.resultScore,
-            color: isAI ? "#ffb36e" : "#83f5b6",
-          }}
-        >
-          {percent.toFixed(1)}%
+          <div style={styles.reportTitleRow}>
+            <div>
+              <h2 style={styles.reportTitle}>{t.aiFingerprint}</h2>
+              <p style={styles.reportText}>{confidenceCopy}</p>
+            </div>
+
+            <div
+              style={{
+                ...styles.scoreRing,
+                background: `conic-gradient(${ringColor} ${percent * 3.6}deg, rgba(255,255,255,0.09) 0deg)`,
+              }}
+            >
+              <div style={styles.scoreRingInner}>
+                <strong style={{ ...styles.scoreRingValue, color: ringColor }}>
+                  {percent.toFixed(1)}%
+                </strong>
+                <span style={styles.scoreRingLabel}>{t.ai}</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={styles.summaryGrid}>
+            {stats.map((stat) => (
+              <div style={styles.summaryStat} key={stat.label}>
+                <span style={styles.summaryLabel}>{stat.label}</span>
+                <strong
+                  style={{
+                    ...styles.summaryValue,
+                    ...(stat.tone === "ai"
+                      ? styles.summaryValueAI
+                      : stat.tone === "real"
+                        ? styles.summaryValueReal
+                        : {}),
+                  }}
+                >
+                  {stat.value}
+                </strong>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       <div style={styles.confidenceCard}>
         <div style={styles.confidenceTopline}>
           <span style={styles.realText}>{t.real}</span>
-          <span style={styles.confidenceTitle}>{t.aiProbability}</span>
+          <span style={styles.confidenceTitle}>{t.probabilitySplit}</span>
           <span style={styles.aiText}>{t.ai}</span>
         </div>
         <div style={styles.confidenceRail}>
@@ -184,29 +262,59 @@ export default function AnalysisResult({ result, styles, t, onFeedbackRequest })
         </div>
       </div>
 
-      <div style={styles.signalGrid}>
-        {signals.map((signal) => (
-          <div style={styles.signalRow} key={signal.label}>
-            <div style={styles.signalText}>
-              <span style={styles.signalLabel}>{signal.label}</span>
-              {signal.hint ? <span style={styles.signalHint}>{signal.hint}</span> : null}
+      <div style={styles.fingerprintSection}>
+        <div style={styles.fingerprintHeader}>
+          <div>
+            <div style={styles.fingerprintTitle}>{t.strongestIndicators}</div>
+            <div style={styles.fingerprintSub}>
+              {isAI ? t.fingerprintSubAI : t.fingerprintSubReal}
             </div>
-            <div style={styles.signalMeter}>
-              <div
-                style={{
-                  ...styles.signalFill,
-                  width: `${signal.value}%`,
-                  ...(signal.tone === "real"
-                    ? styles.signalFillReal
-                    : signal.tone === "ai"
-                      ? styles.signalFillAI
-                      : styles.signalFillNeutral),
-                }}
-              ></div>
-            </div>
-            <span style={styles.signalValue}>{signal.value}%</span>
           </div>
-        ))}
+        </div>
+
+        <div style={styles.fingerprintGrid}>
+          {fingerprints.map((item) => (
+            <article style={styles.fingerprintCard} key={`${item.label}-${item.hint}`}>
+              <div style={styles.fingerprintCardTop}>
+                <span style={styles.fingerprintName}>{item.label}</span>
+                <span
+                  style={{
+                    ...styles.fingerprintBadge,
+                    ...(item.tone === "ai"
+                      ? styles.fingerprintBadgeAI
+                      : item.tone === "real"
+                        ? styles.fingerprintBadgeReal
+                        : {}),
+                  }}
+                >
+                  {item.hint}
+                </span>
+              </div>
+              <div style={styles.fingerprintMeter}>
+                <div
+                  style={{
+                    ...styles.fingerprintFill,
+                    width: `${item.value}%`,
+                    ...(item.tone === "ai"
+                      ? styles.signalFillAI
+                      : item.tone === "real"
+                        ? styles.signalFillReal
+                        : styles.signalFillNeutral),
+                  }}
+                ></div>
+              </div>
+              <div style={styles.fingerprintMeta}>
+                <span>{t.modelSignal}</span>
+                <strong>{item.value}%</strong>
+              </div>
+              {item.metricValue !== undefined ? (
+                <div style={styles.fingerprintRaw}>
+                  {t.rawMetric}: {formatMetricValue(item.metricValue)}
+                </div>
+              ) : null}
+            </article>
+          ))}
+        </div>
       </div>
 
       <div style={styles.detailCard}>

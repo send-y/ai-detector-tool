@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ALLOWED_IMAGE_EXTENSIONS,
   ALLOWED_IMAGE_TYPES,
@@ -32,6 +32,7 @@ function validateImageFile(file, t) {
 }
 
 export function useImageAnalysis({ onAnalysisSaved, t }) {
+  const previewUrlRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -41,7 +42,15 @@ export function useImageAnalysis({ onAnalysisSaved, t }) {
   const [lastAnalysisId, setLastAnalysisId] = useState(null);
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
 
+  const clearPreviewUrl = useCallback(() => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  }, []);
+
   const resetAnalysis = useCallback(() => {
+    clearPreviewUrl();
     setResult(null);
     setPreview(null);
     setError(null);
@@ -50,13 +59,14 @@ export function useImageAnalysis({ onAnalysisSaved, t }) {
 
     const input = document.getElementById("fileInput");
     if (input) input.value = "";
-  }, []);
+  }, [clearPreviewUrl]);
+
+  useEffect(() => clearPreviewUrl, [clearPreviewUrl]);
 
   const handleFile = useCallback(
     async (file) => {
       if (!file) return;
 
-      let objectUrl = null;
       setResult(null);
       setLastAnalysisId(null);
       setError(null);
@@ -69,7 +79,9 @@ export function useImageAnalysis({ onAnalysisSaved, t }) {
           throw new Error(t.unauthorized);
         }
 
-        objectUrl = URL.createObjectURL(file);
+        clearPreviewUrl();
+        const objectUrl = URL.createObjectURL(file);
+        previewUrlRef.current = objectUrl;
         setPreview(objectUrl);
         setIsLoading(true);
 
@@ -90,10 +102,9 @@ export function useImageAnalysis({ onAnalysisSaved, t }) {
         setError(err?.message || t.analyzeFailed);
       } finally {
         setIsLoading(false);
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
       }
     },
-    [onAnalysisSaved, t]
+    [clearPreviewUrl, onAnalysisSaved, t]
   );
 
   const saveFeedback = useCallback(

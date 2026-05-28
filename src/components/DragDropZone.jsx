@@ -49,6 +49,7 @@ export default function DragDropZone({ onAnalysisSaved, language = "en" }) {
 
         <AnalysisResult
           result={result}
+          preview={preview}
           styles={styles}
           t={t}
           onFeedbackRequest={() => setFeedbackOpen(true)}

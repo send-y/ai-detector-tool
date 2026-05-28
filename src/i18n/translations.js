@@ -95,6 +95,22 @@ export function getDragDropTranslations(language = "en") {
       ? "Модель не повернула сирі метрики."
       : "No raw metrics returned by the model.",
     downloadAnalysis: isUk ? "Завантажити аналіз" : "Download analysis",
+    aiFingerprint: isUk ? "Відбиток ШІ" : "AI fingerprint",
+    reportReady: isUk ? "Звіт готовий" : "Report ready",
+    uploadedImage: isUk ? "Завантажене зображення" : "Uploaded image",
+    probabilitySplit: isUk ? "Розподіл ймовірності" : "Probability split",
+    strongestIndicators: isUk ? "Найсильніші індикатори" : "Strongest indicators",
+    fingerprintSubAI: isUk
+      ? "Модель показує, які сигнали найбільше схиляють результат до ШІ."
+      : "The model shows which signals most strongly push the result toward AI.",
+    fingerprintSubReal: isUk
+      ? "Модель показує, які сигнали найбільше схиляють результат до справжнього фото."
+      : "The model shows which signals most strongly push the result toward a real photo.",
+    modelSignal: isUk ? "Сигнал моделі" : "Model signal",
+    visualEvidence: isUk ? "Візуальна ознака" : "Visual evidence",
+    rawMetric: isUk ? "Сира метрика" : "Raw metric",
+    threshold: isUk ? "Поріг" : "Threshold",
+    modelVersion: isUk ? "Версія моделі" : "Model version",
     metricsTitle: isUk ? "Детальні метрики" : "Detailed metrics",
     checkAnotherPhoto: isUk ? "Перевірити інше фото" : "Check another photo",
     close: isUk ? "Закрити" : "Close",

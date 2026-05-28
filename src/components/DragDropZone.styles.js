@@ -341,6 +341,232 @@ export const dragDropStyles = {
     gap: 12,
   },
 
+  reportHero: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 14,
+    padding: 14,
+    borderRadius: 22,
+    background:
+      "linear-gradient(180deg, rgba(14, 17, 24, 0.88), rgba(8, 10, 14, 0.94))",
+    border: "1px solid rgba(255,255,255,0.09)",
+    boxShadow:
+      "0 22px 54px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.05)",
+    backdropFilter: "blur(18px)",
+    WebkitBackdropFilter: "blur(18px)",
+  },
+
+  reportMedia: {
+    flex: "1 1 190px",
+    minWidth: 170,
+    display: "grid",
+    gap: 10,
+  },
+
+  reportMediaFrame: {
+    position: "relative",
+    aspectRatio: "4 / 5",
+    minHeight: 210,
+    maxHeight: 310,
+    borderRadius: 18,
+    overflow: "hidden",
+    background:
+      "linear-gradient(180deg, rgba(24, 31, 68, 0.92), rgba(12, 15, 32, 0.96))",
+    border: "1px solid rgba(120, 152, 255, 0.18)",
+    boxShadow:
+      "0 18px 40px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.06)",
+  },
+
+  reportImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
+
+  reportImageFallback: {
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "rgba(255,255,255,0.68)",
+    fontSize: 13,
+    fontWeight: 900,
+    letterSpacing: "0.14em",
+  },
+
+  reportScanLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: "58%",
+    height: 2,
+    background:
+      "linear-gradient(90deg, transparent, rgba(105, 151, 255, 0.92), transparent)",
+    boxShadow: "0 0 18px rgba(105,151,255,0.62)",
+    opacity: 0.86,
+  },
+
+  reportMediaCaption: {
+    color: "rgba(255,255,255,0.54)",
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    textAlign: "center",
+  },
+
+  reportContent: {
+    flex: "2 1 300px",
+    minWidth: 0,
+    display: "grid",
+    alignContent: "space-between",
+    gap: 16,
+  },
+
+  reportTopline: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+
+  reportPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: 28,
+    padding: "7px 11px",
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 900,
+    letterSpacing: 0,
+    color: "#fff",
+  },
+
+  reportPillAI: {
+    background: "rgba(255, 91, 118, 0.18)",
+    border: "1px solid rgba(255, 112, 128, 0.3)",
+    color: "#ff9e7d",
+  },
+
+  reportPillReal: {
+    background: "rgba(72, 220, 142, 0.16)",
+    border: "1px solid rgba(112, 238, 166, 0.26)",
+    color: "#82f3b3",
+  },
+
+  reportReady: {
+    color: "rgba(255,255,255,0.48)",
+    fontSize: 11,
+    fontWeight: 800,
+  },
+
+  reportTitleRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+
+  reportTitle: {
+    margin: 0,
+    color: "rgba(255,255,255,0.96)",
+    fontSize: 27,
+    lineHeight: 1.05,
+    fontWeight: 950,
+    letterSpacing: 0,
+  },
+
+  reportText: {
+    margin: "8px 0 0",
+    maxWidth: 410,
+    color: "rgba(255,255,255,0.63)",
+    fontSize: 13,
+    lineHeight: 1.45,
+    fontWeight: 650,
+  },
+
+  scoreRing: {
+    width: 106,
+    height: 106,
+    flex: "0 0 106px",
+    borderRadius: "50%",
+    padding: 8,
+    boxShadow: "0 16px 34px rgba(0,0,0,0.28)",
+  },
+
+  scoreRingInner: {
+    width: "100%",
+    height: "100%",
+    borderRadius: "50%",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "linear-gradient(180deg, rgba(15,17,24,0.98), rgba(7,8,12,0.98))",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+  },
+
+  scoreRingValue: {
+    fontSize: 20,
+    lineHeight: 1,
+    fontWeight: 950,
+    letterSpacing: 0,
+  },
+
+  scoreRingLabel: {
+    marginTop: 5,
+    color: "rgba(255,255,255,0.52)",
+    fontSize: 10,
+    fontWeight: 900,
+  },
+
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(116px, 1fr))",
+    gap: 8,
+  },
+
+  summaryStat: {
+    minWidth: 0,
+    padding: "11px 12px",
+    borderRadius: 14,
+    background: "rgba(255,255,255,0.045)",
+    border: "1px solid rgba(255,255,255,0.07)",
+  },
+
+  summaryLabel: {
+    display: "block",
+    color: "rgba(255,255,255,0.48)",
+    fontSize: 10,
+    fontWeight: 850,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  summaryValue: {
+    display: "block",
+    marginTop: 5,
+    color: "rgba(255,255,255,0.88)",
+    fontSize: 15,
+    lineHeight: 1,
+    fontWeight: 950,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  summaryValueAI: {
+    color: "#ff9d74",
+  },
+
+  summaryValueReal: {
+    color: "#83f5b6",
+  },
+
   resultHeader: {
     display: "flex",
     alignItems: "center",
@@ -552,6 +778,133 @@ export const dragDropStyles = {
     color: "rgba(255,255,255,0.84)",
     fontSize: 12,
     fontWeight: 900,
+  },
+
+  fingerprintSection: {
+    display: "grid",
+    gap: 10,
+    padding: 14,
+    borderRadius: 20,
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.026))",
+    border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow: "0 16px 36px rgba(0,0,0,0.22)",
+  },
+
+  fingerprintHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  fingerprintTitle: {
+    color: "rgba(255,255,255,0.94)",
+    fontSize: 15,
+    lineHeight: 1.15,
+    fontWeight: 950,
+  },
+
+  fingerprintSub: {
+    marginTop: 4,
+    color: "rgba(255,255,255,0.48)",
+    fontSize: 11,
+    lineHeight: 1.4,
+    fontWeight: 700,
+  },
+
+  fingerprintGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 10,
+  },
+
+  fingerprintCard: {
+    minWidth: 0,
+    display: "grid",
+    gap: 10,
+    padding: 13,
+    borderRadius: 16,
+    background: "rgba(8, 10, 13, 0.76)",
+    border: "1px solid rgba(255,255,255,0.075)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.035)",
+  },
+
+  fingerprintCardTop: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+
+  fingerprintName: {
+    minWidth: 0,
+    color: "rgba(255,255,255,0.88)",
+    fontSize: 12,
+    lineHeight: 1.2,
+    fontWeight: 950,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+
+  fingerprintBadge: {
+    flexShrink: 0,
+    maxWidth: 94,
+    padding: "5px 7px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.055)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    color: "rgba(255,255,255,0.58)",
+    fontSize: 9,
+    lineHeight: 1.1,
+    fontWeight: 900,
+    textAlign: "center",
+  },
+
+  fingerprintBadgeAI: {
+    background: "rgba(255, 91, 118, 0.12)",
+    borderColor: "rgba(255, 91, 118, 0.24)",
+    color: "#ff9e7d",
+  },
+
+  fingerprintBadgeReal: {
+    background: "rgba(72, 220, 142, 0.12)",
+    borderColor: "rgba(72, 220, 142, 0.22)",
+    color: "#83f5b6",
+  },
+
+  fingerprintMeter: {
+    height: 8,
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+
+  fingerprintFill: {
+    height: "100%",
+    minWidth: 5,
+    borderRadius: 999,
+    transition: "width 0.35s ease",
+  },
+
+  fingerprintMeta: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 10,
+    fontWeight: 850,
+  },
+
+  fingerprintRaw: {
+    color: "rgba(255,255,255,0.42)",
+    fontSize: 10,
+    fontWeight: 750,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
 
   detailCard: {
