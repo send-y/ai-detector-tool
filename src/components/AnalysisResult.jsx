@@ -8,7 +8,11 @@ function toPercent(probability) {
   return Math.round(clamp(probability, 0, 1) * 1000) / 10;
 }
 
-function humanizeMetric(key = "") {
+function humanizeMetric(key = "", t = {}) {
+  if (t.metricLabels?.[key]) {
+    return t.metricLabels[key];
+  }
+
   return String(key)
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
@@ -26,15 +30,15 @@ function metricStrength(item, fallbackIndex) {
   return Math.round(clamp(rawStrength * 100, 8, 99));
 }
 
-function buildSignals(result, percent, realPercent) {
+function buildSignals(result, percent, realPercent, t) {
   const baseSignals = [
     {
-      label: "AI confidence",
+      label: t.aiConfidence,
       value: percent,
       tone: "ai",
     },
     {
-      label: "Real-photo score",
+      label: t.realPhotoScore,
       value: realPercent,
       tone: "real",
     },
@@ -42,10 +46,10 @@ function buildSignals(result, percent, realPercent) {
 
   const topSignals = Array.isArray(result?.top_contributions)
     ? result.top_contributions.slice(0, 3).map((item, index) => ({
-        label: humanizeMetric(item.metric),
+        label: humanizeMetric(item.metric, t),
         value: metricStrength(item, index),
         tone: Number(item.contribution) >= 0 ? "ai" : "real",
-        hint: Number(item.contribution) >= 0 ? "Pushes AI" : "Pushes Real",
+        hint: Number(item.contribution) >= 0 ? t.pushesAI : t.pushesReal,
       }))
     : [];
 
@@ -55,9 +59,9 @@ function buildSignals(result, percent, realPercent) {
 
   const metrics = result?.metrics || {};
   const fallbackMetrics = [
-    ["Artifact signal", metrics.jpeg_artifact_score],
-    ["Texture noise", metrics.noise_naturalness ?? metrics.noise_entropy],
-    ["Frequency pattern", metrics.hf_energy_ratio ?? metrics.spectral_flatness],
+    [t.artifactSignal, metrics.jpeg_artifact_score],
+    [t.textureNoise, metrics.noise_naturalness ?? metrics.noise_entropy],
+    [t.frequencyPattern, metrics.hf_energy_ratio ?? metrics.spectral_flatness],
   ]
     .filter(([, value]) => Number.isFinite(Number(value)))
     .map(([label, value]) => ({
@@ -112,19 +116,19 @@ export default function AnalysisResult({ result, styles, t, onFeedbackRequest })
   const isAI = result?.label === "AI-generated" || result?.label === "ai";
   const statusLabel = isAI
     ? percent >= 75
-      ? "Suspicious"
-      : "Needs review"
+      ? t.statusSuspicious
+      : t.statusNeedsReview
     : percent <= 35
-      ? "Likely real"
-      : "Needs review";
+      ? t.statusLikelyReal
+      : t.statusNeedsReview;
   const confidenceCopy = isAI
-    ? "AI-generation signal detected. Review the strongest model indicators below."
-    : "Natural image signal detected. Review the strongest model indicators below.";
-  const signals = buildSignals(result, percent, realPercent);
+    ? t.aiSignalDetected
+    : t.realSignalDetected;
+  const signals = buildSignals(result, percent, realPercent, t);
   const metricEntries = Object.entries(result.metrics || {}).slice(0, 8);
 
   return (
-    <section style={styles.resultPanel} aria-label="Analysis result">
+    <section style={styles.resultPanel} aria-label={t.analysisResultLabel}>
       <div style={styles.resultHeader}>
         <div style={styles.resultIdentity}>
           <div
@@ -161,7 +165,7 @@ export default function AnalysisResult({ result, styles, t, onFeedbackRequest })
       <div style={styles.confidenceCard}>
         <div style={styles.confidenceTopline}>
           <span style={styles.realText}>{t.real}</span>
-          <span style={styles.confidenceTitle}>{t.aiProbability || "AI probability"}</span>
+          <span style={styles.confidenceTitle}>{t.aiProbability}</span>
           <span style={styles.aiText}>{t.ai}</span>
         </div>
         <div style={styles.confidenceRail}>
@@ -206,17 +210,17 @@ export default function AnalysisResult({ result, styles, t, onFeedbackRequest })
       </div>
 
       <div style={styles.detailCard}>
-        <div style={styles.detailTitle}>Detailed analysis</div>
+        <div style={styles.detailTitle}>{t.detailedAnalysis}</div>
         <div style={styles.detailBody}>
           {metricEntries.length > 0 ? (
             metricEntries.map(([key, value]) => (
               <div style={styles.detailMetric} key={key}>
-                <span style={styles.detailMetricText}>{humanizeMetric(key)}</span>
+                <span style={styles.detailMetricText}>{humanizeMetric(key, t)}</span>
                 <strong style={styles.detailMetricValue}>{formatMetricValue(value)}</strong>
               </div>
             ))
           ) : (
-            <div style={styles.detailNote}>No raw metrics returned by the model.</div>
+            <div style={styles.detailNote}>{t.noRawMetrics}</div>
           )}
         </div>
       </div>
@@ -227,7 +231,7 @@ export default function AnalysisResult({ result, styles, t, onFeedbackRequest })
           type="button"
           onClick={() => downloadReport(result, percent, statusLabel)}
         >
-          Download analysis
+          {t.downloadAnalysis}
         </button>
         <button style={styles.secondaryBtn} type="button" onClick={onFeedbackRequest}>
           {t.checkAnotherPhoto}
