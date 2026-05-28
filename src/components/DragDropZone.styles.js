@@ -335,6 +335,313 @@ export const dragDropStyles = {
     boxShadow: "0 18px 34px rgba(81,124,255,0.28)",
   },
 
+  resultPanel: {
+    marginTop: 22,
+    display: "grid",
+    gap: 12,
+  },
+
+  resultHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    padding: "16px 18px",
+    borderRadius: 18,
+    background:
+      "linear-gradient(180deg, rgba(52, 28, 34, 0.86), rgba(31, 17, 23, 0.9))",
+    border: "1px solid rgba(255, 116, 92, 0.26)",
+    boxShadow:
+      "0 18px 40px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.06)",
+    backdropFilter: "blur(16px)",
+    WebkitBackdropFilter: "blur(16px)",
+  },
+
+  resultIdentity: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+  },
+
+  resultIcon: {
+    width: 54,
+    height: 54,
+    flexShrink: 0,
+    borderRadius: 14,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 14,
+    fontWeight: 900,
+    letterSpacing: 0,
+    color: "#fff",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+  },
+
+  resultIconAI: {
+    background: "linear-gradient(135deg, rgba(255, 86, 118, 0.28), rgba(90, 104, 255, 0.22))",
+    border: "1px solid rgba(255, 139, 114, 0.22)",
+  },
+
+  resultIconReal: {
+    background: "linear-gradient(135deg, rgba(55, 217, 139, 0.26), rgba(82, 140, 255, 0.18))",
+    border: "1px solid rgba(111, 238, 167, 0.22)",
+  },
+
+  resultStatus: {
+    fontSize: 22,
+    lineHeight: 1.05,
+    fontWeight: 900,
+    letterSpacing: 0,
+  },
+
+  resultDescription: {
+    marginTop: 5,
+    maxWidth: 390,
+    color: "rgba(255,255,255,0.68)",
+    fontSize: 12,
+    lineHeight: 1.4,
+    fontWeight: 600,
+  },
+
+  resultScore: {
+    flexShrink: 0,
+    minWidth: 74,
+    textAlign: "right",
+    fontSize: 18,
+    lineHeight: 1,
+    fontWeight: 900,
+    letterSpacing: 0,
+  },
+
+  confidenceCard: {
+    padding: "14px 16px 12px",
+    borderRadius: 17,
+    background: "rgba(10, 12, 16, 0.72)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    boxShadow: "0 14px 32px rgba(0,0,0,0.24)",
+  },
+
+  confidenceTopline: {
+    display: "grid",
+    gridTemplateColumns: "1fr auto 1fr",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+    fontSize: 12,
+    fontWeight: 800,
+  },
+
+  confidenceTitle: {
+    minWidth: 0,
+    color: "rgba(255,255,255,0.72)",
+    textAlign: "center",
+    fontSize: 11,
+    fontWeight: 800,
+  },
+
+  confidenceRail: {
+    position: "relative",
+    height: 12,
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    overflow: "visible",
+    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.36)",
+  },
+
+  confidenceGradient: {
+    position: "absolute",
+    inset: 0,
+    borderRadius: 999,
+    background:
+      "linear-gradient(90deg, #51e08c 0%, #e7dc63 48%, #ff9c48 68%, #ff4f76 100%)",
+    boxShadow: "0 0 18px rgba(255, 111, 118, 0.18)",
+  },
+
+  confidenceMarker: {
+    position: "absolute",
+    top: "50%",
+    width: 16,
+    height: 16,
+    borderRadius: "50%",
+    transform: "translate(-50%, -50%)",
+    background: "#fff",
+    border: "3px solid #ff6a7a",
+    boxShadow: "0 0 0 4px rgba(255, 90, 118, 0.18), 0 8px 18px rgba(0,0,0,0.34)",
+  },
+
+  confidenceTicks: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: 8,
+    color: "rgba(255,255,255,0.38)",
+    fontSize: 10,
+    fontWeight: 700,
+  },
+
+  signalGrid: {
+    display: "grid",
+    gap: 8,
+    padding: 12,
+    borderRadius: 17,
+    background: "rgba(255,255,255,0.035)",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+
+  signalRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(96px, 1fr) minmax(76px, 1fr) 46px",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 28,
+  },
+
+  signalText: {
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+
+  signalLabel: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 12,
+    fontWeight: 800,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  signalHint: {
+    color: "rgba(255,255,255,0.38)",
+    fontSize: 10,
+    fontWeight: 700,
+  },
+
+  signalMeter: {
+    height: 7,
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+
+  signalFill: {
+    height: "100%",
+    minWidth: 4,
+    borderRadius: 999,
+    transition: "width 0.35s ease",
+  },
+
+  signalFillAI: {
+    background: "linear-gradient(90deg, #ff8a50, #ff4e7c)",
+    boxShadow: "0 0 14px rgba(255, 78, 124, 0.25)",
+  },
+
+  signalFillReal: {
+    background: "linear-gradient(90deg, #42d988, #83f5b6)",
+    boxShadow: "0 0 14px rgba(84, 226, 148, 0.2)",
+  },
+
+  signalFillNeutral: {
+    background: "linear-gradient(90deg, #75a7ff, #ffd777)",
+  },
+
+  signalValue: {
+    textAlign: "right",
+    color: "rgba(255,255,255,0.84)",
+    fontSize: 12,
+    fontWeight: 900,
+  },
+
+  detailCard: {
+    borderRadius: 17,
+    overflow: "hidden",
+    background: "rgba(8, 10, 13, 0.72)",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+
+  detailTitle: {
+    padding: "13px 15px",
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 13,
+    fontWeight: 900,
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
+  },
+
+  detailBody: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 1,
+    background: "rgba(255,255,255,0.04)",
+  },
+
+  detailMetric: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: "10px 12px",
+    background: "rgba(8, 10, 13, 0.88)",
+    color: "rgba(255,255,255,0.54)",
+    fontSize: 11,
+    fontWeight: 700,
+  },
+
+  detailMetricText: {
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  detailMetricValue: {
+    flexShrink: 0,
+    color: "rgba(255,255,255,0.86)",
+    fontWeight: 900,
+  },
+
+  detailNote: {
+    gridColumn: "1 / -1",
+    padding: 12,
+    background: "rgba(8, 10, 13, 0.88)",
+    color: "rgba(255,255,255,0.58)",
+    fontSize: 12,
+    fontWeight: 700,
+  },
+
+  resultActions: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+  },
+
+  downloadBtn: {
+    width: "100%",
+    padding: "14px 16px",
+    border: "1px solid rgba(120,160,255,0.16)",
+    borderRadius: 15,
+    background: "linear-gradient(135deg, #6ca1ff, #517cff)",
+    color: "#fff",
+    fontWeight: 900,
+    fontSize: 13,
+    cursor: "pointer",
+    boxShadow: "0 16px 30px rgba(81,124,255,0.24)",
+  },
+
+  secondaryBtn: {
+    width: "100%",
+    padding: "14px 16px",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 15,
+    background: "rgba(255,255,255,0.045)",
+    color: "rgba(255,255,255,0.86)",
+    fontWeight: 900,
+    fontSize: 13,
+    cursor: "pointer",
+  },
+
   modalBackdrop: {
     position: "fixed",
     inset: 0,
