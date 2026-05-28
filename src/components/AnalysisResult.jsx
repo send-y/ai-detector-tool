@@ -38,6 +38,285 @@ function formatMetricValue(value) {
   return String(value);
 }
 
+function loadCanvasImage(src) {
+  return new Promise((resolve) => {
+    if (!src) {
+      resolve(null);
+      return;
+    }
+
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
+}
+
+function roundedRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
+function fillRoundedRect(ctx, x, y, width, height, radius, fillStyle) {
+  roundedRect(ctx, x, y, width, height, radius);
+  ctx.fillStyle = fillStyle;
+  ctx.fill();
+}
+
+function strokeRoundedRect(ctx, x, y, width, height, radius, strokeStyle, lineWidth = 1) {
+  roundedRect(ctx, x, y, width, height, radius);
+  ctx.strokeStyle = strokeStyle;
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
+}
+
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 4) {
+  const words = String(text || "").split(/\s+/);
+  const lines = [];
+  let line = "";
+
+  words.forEach((word) => {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  });
+
+  if (line) lines.push(line);
+
+  lines.slice(0, maxLines).forEach((item, index) => {
+    const suffix = index === maxLines - 1 && lines.length > maxLines ? "..." : "";
+    ctx.fillText(`${item}${suffix}`, x, y + index * lineHeight);
+  });
+}
+
+function drawCoverImage(ctx, image, x, y, width, height, radius) {
+  ctx.save();
+  roundedRect(ctx, x, y, width, height, radius);
+  ctx.clip();
+
+  if (!image) {
+    const fallback = ctx.createLinearGradient(x, y, x + width, y + height);
+    fallback.addColorStop(0, "#1a2454");
+    fallback.addColorStop(1, "#0b1027");
+    ctx.fillStyle = fallback;
+    ctx.fillRect(x, y, width, height);
+    ctx.fillStyle = "rgba(255,255,255,0.62)";
+    ctx.font = "900 42px Inter, Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("LANDER", x + width / 2, y + height / 2);
+    ctx.textAlign = "left";
+    ctx.restore();
+    return;
+  }
+
+  const sourceRatio = image.width / image.height;
+  const targetRatio = width / height;
+  let sx = 0;
+  let sy = 0;
+  let sw = image.width;
+  let sh = image.height;
+
+  if (sourceRatio > targetRatio) {
+    sw = image.height * targetRatio;
+    sx = (image.width - sw) / 2;
+  } else {
+    sh = image.width / targetRatio;
+    sy = (image.height - sh) / 2;
+  }
+
+  ctx.drawImage(image, sx, sy, sw, sh, x, y, width, height);
+  ctx.restore();
+}
+
+function drawPill(ctx, text, x, y, fill, stroke, color) {
+  ctx.font = "900 24px Inter, Arial, sans-serif";
+  const width = Math.max(120, ctx.measureText(text).width + 42);
+  fillRoundedRect(ctx, x, y, width, 48, 24, fill);
+  strokeRoundedRect(ctx, x, y, width, 48, 24, stroke, 2);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x + 21, y + 31);
+  return width;
+}
+
+function drawProgress(ctx, x, y, width, value, tone) {
+  fillRoundedRect(ctx, x, y, width, 14, 7, "rgba(255,255,255,0.10)");
+  const gradient = ctx.createLinearGradient(x, y, x + width, y);
+  if (tone === "real") {
+    gradient.addColorStop(0, "#45db8e");
+    gradient.addColorStop(1, "#83f5b6");
+  } else if (tone === "ai") {
+    gradient.addColorStop(0, "#ff8a50");
+    gradient.addColorStop(1, "#ff4e7c");
+  } else {
+    gradient.addColorStop(0, "#75a7ff");
+    gradient.addColorStop(1, "#ffd777");
+  }
+  fillRoundedRect(ctx, x, y, Math.max(8, width * clamp(value, 0, 100) / 100), 14, 7, gradient);
+}
+
+async function downloadReportPng({
+  result,
+  preview,
+  percent,
+  realPercent,
+  statusLabel,
+  confidenceCopy,
+  fingerprints,
+  stats,
+  t,
+  isAI,
+}) {
+  const image = await loadCanvasImage(preview);
+  const canvas = document.createElement("canvas");
+  canvas.width = 1200;
+  canvas.height = 1500;
+  const ctx = canvas.getContext("2d");
+  const ringColor = isAI ? "#ff6d83" : "#62e69a";
+
+  const bg = ctx.createLinearGradient(0, 0, 1200, 1500);
+  bg.addColorStop(0, "#08090d");
+  bg.addColorStop(0.55, "#10131c");
+  bg.addColorStop(1, "#05060a");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 1200, 1500);
+
+  const glow = ctx.createRadialGradient(850, 120, 10, 850, 120, 520);
+  glow.addColorStop(0, "rgba(85,118,255,0.20)");
+  glow.addColorStop(1, "rgba(85,118,255,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, 1200, 760);
+
+  ctx.fillStyle = "rgba(255,255,255,0.86)";
+  ctx.font = "900 38px Inter, Arial, sans-serif";
+  ctx.fillText("LANDER", 76, 86);
+  ctx.fillStyle = "rgba(255,255,255,0.44)";
+  ctx.font = "800 20px Inter, Arial, sans-serif";
+  ctx.fillText(t.aiFingerprint, 76, 120);
+  ctx.textAlign = "right";
+  ctx.fillText(new Date().toLocaleDateString(), 1124, 96);
+  ctx.textAlign = "left";
+
+  fillRoundedRect(ctx, 56, 154, 1088, 560, 34, "rgba(13,16,24,0.88)");
+  strokeRoundedRect(ctx, 56, 154, 1088, 560, 34, "rgba(255,255,255,0.10)", 2);
+
+  drawCoverImage(ctx, image, 92, 198, 390, 470, 28);
+  ctx.fillStyle = "rgba(255,255,255,0.44)";
+  ctx.font = "900 18px Inter, Arial, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(t.uploadedImage, 287, 694);
+  ctx.textAlign = "left";
+
+  const pillFill = isAI ? "rgba(255,91,118,0.18)" : "rgba(72,220,142,0.16)";
+  const pillStroke = isAI ? "rgba(255,112,128,0.32)" : "rgba(112,238,166,0.28)";
+  const pillColor = isAI ? "#ff9e7d" : "#82f3b3";
+  drawPill(ctx, statusLabel, 526, 202, pillFill, pillStroke, pillColor);
+
+  ctx.fillStyle = "rgba(255,255,255,0.95)";
+  ctx.font = "950 54px Inter, Arial, sans-serif";
+  ctx.fillText(t.aiFingerprint, 526, 320);
+  ctx.fillStyle = "rgba(255,255,255,0.62)";
+  ctx.font = "700 25px Inter, Arial, sans-serif";
+  drawWrappedText(ctx, confidenceCopy, 526, 362, 390, 34, 4);
+
+  ctx.beginPath();
+  ctx.arc(1006, 322, 88, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.lineWidth = 20;
+  ctx.lineCap = "round";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(1006, 322, 88, -Math.PI / 2, Math.PI * 2 * (percent / 100) - Math.PI / 2);
+  ctx.strokeStyle = ringColor;
+  ctx.lineWidth = 20;
+  ctx.stroke();
+  ctx.fillStyle = ringColor;
+  ctx.font = "950 42px Inter, Arial, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(`${percent.toFixed(1)}%`, 1006, 332);
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.font = "900 18px Inter, Arial, sans-serif";
+  ctx.fillText(t.ai, 1006, 364);
+  ctx.textAlign = "left";
+
+  stats.forEach((stat, index) => {
+    const x = 526 + (index % 2) * 290;
+    const y = 500 + Math.floor(index / 2) * 92;
+    fillRoundedRect(ctx, x, y, 258, 68, 18, "rgba(255,255,255,0.055)");
+    strokeRoundedRect(ctx, x, y, 258, 68, 18, "rgba(255,255,255,0.08)", 1);
+    ctx.fillStyle = "rgba(255,255,255,0.48)";
+    ctx.font = "850 17px Inter, Arial, sans-serif";
+    ctx.fillText(stat.label, x + 18, y + 25);
+    ctx.fillStyle = stat.tone === "ai" ? "#ff9d74" : stat.tone === "real" ? "#83f5b6" : "#ffffff";
+    ctx.font = "950 26px Inter, Arial, sans-serif";
+    ctx.fillText(stat.value, x + 18, y + 54);
+  });
+
+  fillRoundedRect(ctx, 56, 754, 1088, 392, 30, "rgba(255,255,255,0.035)");
+  strokeRoundedRect(ctx, 56, 754, 1088, 392, 30, "rgba(255,255,255,0.09)", 2);
+  ctx.fillStyle = "rgba(255,255,255,0.94)";
+  ctx.font = "950 34px Inter, Arial, sans-serif";
+  ctx.fillText(t.strongestIndicators, 92, 818);
+  ctx.fillStyle = "rgba(255,255,255,0.52)";
+  ctx.font = "750 20px Inter, Arial, sans-serif";
+  drawWrappedText(ctx, isAI ? t.fingerprintSubAI : t.fingerprintSubReal, 92, 850, 760, 28, 2);
+
+  fingerprints.slice(0, 4).forEach((item, index) => {
+    const x = 92 + (index % 2) * 520;
+    const y = 922 + Math.floor(index / 2) * 104;
+    fillRoundedRect(ctx, x, y, 480, 82, 20, "rgba(7,9,14,0.78)");
+    strokeRoundedRect(ctx, x, y, 480, 82, 20, "rgba(255,255,255,0.08)", 1);
+    ctx.fillStyle = "rgba(255,255,255,0.90)";
+    ctx.font = "900 22px Inter, Arial, sans-serif";
+    drawWrappedText(ctx, item.label, x + 18, y + 29, 260, 24, 1);
+    ctx.fillStyle = item.tone === "real" ? "#83f5b6" : item.tone === "ai" ? "#ff9e7d" : "#ffffff";
+    ctx.font = "900 17px Inter, Arial, sans-serif";
+    ctx.fillText(item.hint, x + 312, y + 30);
+    drawProgress(ctx, x + 18, y + 50, 340, item.value, item.tone);
+    ctx.fillStyle = "rgba(255,255,255,0.86)";
+    ctx.font = "950 19px Inter, Arial, sans-serif";
+    ctx.fillText(`${item.value}%`, x + 390, y + 64);
+  });
+
+  fillRoundedRect(ctx, 56, 1184, 1088, 172, 30, "rgba(10,12,18,0.84)");
+  strokeRoundedRect(ctx, 56, 1184, 1088, 172, 30, "rgba(255,255,255,0.09)", 2);
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.font = "950 30px Inter, Arial, sans-serif";
+  ctx.fillText(t.detailedAnalysis, 92, 1242);
+  const details = Object.entries(result?.metrics || {}).slice(0, 6);
+  details.forEach(([key, value], index) => {
+    const x = 92 + (index % 3) * 340;
+    const y = 1288 + Math.floor(index / 3) * 38;
+    ctx.fillStyle = "rgba(255,255,255,0.46)";
+    ctx.font = "800 17px Inter, Arial, sans-serif";
+    ctx.fillText(humanizeMetric(key, t), x, y);
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.font = "950 18px Inter, Arial, sans-serif";
+    ctx.fillText(formatMetricValue(value), x, y + 24);
+  });
+
+  ctx.fillStyle = "rgba(255,255,255,0.34)";
+  ctx.font = "800 17px Inter, Arial, sans-serif";
+  ctx.fillText(`${t.reportReady} • LANDER`, 76, 1430);
+
+  const url = canvas.toDataURL("image/png");
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `lander-report-${Date.now()}.png`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function buildFingerprints(result, t) {
   const top = Array.isArray(result?.top_contributions)
     ? result.top_contributions.slice(0, 4).map((item, index) => ({
@@ -115,33 +394,6 @@ function buildSummaryStats(percent, realPercent, result, t) {
   }
 
   return stats.slice(0, 4);
-}
-
-function downloadReport(result, percent, statusLabel) {
-  const report = {
-    status: statusLabel,
-    aiProbabilityPercent: percent,
-    label: result?.label,
-    probability: result?.probability,
-    threshold: result?.threshold,
-    modelVersion: result?.modelVersion,
-    topContributions: result?.top_contributions || [],
-    metrics: result?.metrics || {},
-    extras: result?.extras || {},
-    generatedAt: new Date().toISOString(),
-  };
-
-  const blob = new Blob([JSON.stringify(report, null, 2)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `lander-analysis-${Date.now()}.json`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
 }
 
 export default function AnalysisResult({
@@ -378,7 +630,20 @@ export default function AnalysisResult({
         <button
           style={styles.downloadBtn}
           type="button"
-          onClick={() => downloadReport(result, percent, statusLabel)}
+          onClick={() =>
+            downloadReportPng({
+              result,
+              preview,
+              percent,
+              realPercent,
+              statusLabel,
+              confidenceCopy,
+              fingerprints,
+              stats,
+              t,
+              isAI,
+            })
+          }
         >
           {t.downloadAnalysis}
         </button>

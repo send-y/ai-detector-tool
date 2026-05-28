@@ -94,7 +94,7 @@ export function getDragDropTranslations(language = "en") {
     noRawMetrics: isUk
       ? "Модель не повернула сирі метрики."
       : "No raw metrics returned by the model.",
-    downloadAnalysis: isUk ? "Завантажити аналіз" : "Download analysis",
+    downloadAnalysis: isUk ? "Завантажити PNG-звіт" : "Download PNG report",
     aiFingerprint: isUk ? "Відбиток ШІ" : "AI fingerprint",
     reportReady: isUk ? "Звіт готовий" : "Report ready",
     uploadedImage: isUk ? "Завантажене зображення" : "Uploaded image",
